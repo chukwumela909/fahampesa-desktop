@@ -48,8 +48,18 @@ export default function DashboardScreen({ branchId, onScreenChange }: { branchId
   const costFor = (productId: string) => branchProducts.find((p) => p.id === productId)?.costPrice ?? 0;
   const totalSalesAmount = sum(periodSales.map((sale) => sale.amount));
   const totalExpenses = sum(periodExpenses.map((expense) => expense.amount));
-  const cogs = sum(periodSales.flatMap((s) => (s.lines ?? []).map((l) => costFor(l.productId) * l.quantity)));
-  const totalProfit = periodSales.some((s) => s.lines?.length) ? totalSalesAmount - cogs : Math.round(totalSalesAmount * 0.38);
+  // Prefer the backend-stored profit (cost captured at sale time) so desktop/web/backend all
+  // report the identical figure. Recomputing COGS from the CURRENT catalog cost silently rewrites
+  // historical profit whenever a product's cost price is edited (and counts deleted products as
+  // free) — keep that only as a fallback for unsynced local rows, with a rough 38%-margin
+  // estimate when a sale has no line detail at all.
+  const totalProfit = Math.round(
+    sum(
+      periodSales.map((s) =>
+        s.profit ?? (s.lines?.length ? s.amount - sum(s.lines.map((l) => costFor(l.productId) * l.quantity)) : s.amount * 0.38),
+      ),
+    ),
+  );
   const lowStockProducts = branchProducts.filter((product) => product.status === "low");
   const outOfStockProducts = branchProducts.filter((product) => product.status === "out");
 

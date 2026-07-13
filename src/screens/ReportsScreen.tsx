@@ -27,8 +27,15 @@ export default function ReportsScreen({ branchId }: { branchId: string }) {
   const costFor = (productId: string) => allProducts.find((p) => p.id === productId)?.costPrice ?? 0;
 
   const totalSales = sum(sales.map((s) => s.amount));
-  const cogs = sum(sales.flatMap((s) => (s.lines ?? []).map((l) => costFor(l.productId) * l.quantity)));
-  const totalProfit = sales.some((s) => s.lines?.length) ? totalSales - cogs : Math.round(totalSales * 0.38);
+  // Prefer the backend-stored profit (cost captured at sale time) — matches the web app and the
+  // backend's own figure. Current-catalog COGS recompute is only a fallback for unsynced rows.
+  const totalProfit = Math.round(
+    sum(
+      sales.map((s) =>
+        s.profit ?? (s.lines?.length ? s.amount - sum(s.lines.map((l) => costFor(l.productId) * l.quantity)) : s.amount * 0.38),
+      ),
+    ),
+  );
   const transactions = sales.length;
   const totalExpenses = sum(expenses.map((e) => e.amount));
   const inventoryValue = sum(products.map((p) => p.costPrice * p.quantity));

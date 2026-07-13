@@ -118,6 +118,9 @@ export function adaptSale(raw: Raw, branchId: string): Sale {
     subtotal: num(raw.subtotal),
     tax: num(raw.tax),
     discount: num(raw.discountAmount ?? raw.discount),
+    // Backend-stored profit — the dashboards prefer this over recomputing COGS from the current
+    // catalog cost, so desktop/web/backend all report the identical figure.
+    profit: raw.profit != null ? num(raw.profit) : undefined,
     customerPhone: raw.customer?.phone ? str(raw.customer.phone) : undefined,
     customerEmail: raw.customer?.email ? str(raw.customer.email) : undefined,
     debtorId: raw.customer?.debtorId ? str(raw.customer.debtorId) : undefined,

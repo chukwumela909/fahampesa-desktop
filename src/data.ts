@@ -146,6 +146,9 @@ export interface Sale {
   notes?: string;
   refunded?: boolean;
   createdAtMs?: number;
+  /** Backend-stored profit (totalAmount - totalCost, cost captured at sale time). Absent on
+   *  unsynced local rows and cashier-role responses (the backend strips margin fields). */
+  profit?: number;
 }
 
 /** A locally-held (not yet completed) sale draft. Held sales are local-only — the

@@ -1,6 +1,6 @@
 [package]
 name = "fahampesa-desktop"
-version = "0.1.6"
+version = "0.1.7"
 description = "Fahampesa desktop application"
 authors = ["Fahampesa"]
 edition = "2021"

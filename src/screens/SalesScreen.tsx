@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Clock, History, LogOut, Loader2, Minus, Package, Plus, Power, Search, ShoppingCart, Trash2, User, Wifi, X } from "lucide-react";
+import { ArrowLeft, Calculator, Clock, History, LogOut, Loader2, Minus, Package, Plus, Power, Search, ShoppingCart, Trash2, User, Wifi, X } from "lucide-react";
 import type { HeldSale, Sale } from "@/data";
 import { useAppData } from "@/store/AppData";
 import { formatMoney } from "@/lib/format";
 import ReceiptModal from "@/components/ReceiptModal";
+import PosCalculator from "@/components/PosCalculator";
 
 type PaymentMethodId = "CASH" | "MPESA" | "BANK_TRANSFER" | "CARD" | "CREDIT";
 type DiscountType = "fixed" | "percentage";
@@ -45,6 +46,7 @@ export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, 
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [calcOpen, setCalcOpen] = useState(false);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [lineDiscounts, setLineDiscounts] = useState<Record<string, LineDiscount>>({});
   const [customerName, setCustomerName] = useState("");
@@ -241,6 +243,8 @@ export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, 
           <div className="hidden items-center gap-3 text-sm font-medium sm:flex"><Wifi className="h-5 w-5 text-[#20c75a]" /><span>Online</span></div>
           <div className="h-8 w-px bg-[#1f2a4a]" />
           <div className="text-center leading-tight"><div className="text-[18px] font-bold">{displayTime}</div><div className="text-[14px] text-[#94a3b8]">{displayDate}</div></div>
+          <div className="h-8 w-px bg-[#1f2a4a]" />
+          <button type="button" onClick={() => setCalcOpen((v) => !v)} aria-pressed={calcOpen} className={`grid h-11 w-11 place-items-center rounded-full transition hover:bg-[#1a2547] hover:text-white ${calcOpen ? "bg-[#1a2547] text-white" : "text-[#cbd5e1]"}`} title="Calculator"><Calculator className="h-6 w-6" /></button>
           <div className="h-8 w-px bg-[#1f2a4a]" />
           <button type="button" onClick={onBack} className="grid h-11 w-11 place-items-center rounded-full text-[#cbd5e1] transition hover:bg-[#1a2547] hover:text-white" title="Back to dashboard"><Power className="h-7 w-7" /></button>
           <button type="button" onClick={onSignOut} className="flex items-center gap-2 rounded-xl bg-[#1a2547] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e11d48]" title="Log out"><LogOut className="h-5 w-5" /><span className="hidden sm:inline">Log out</span></button>
@@ -443,6 +447,7 @@ export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, 
       </main>
 
       {receiptLive && <ReceiptModal sale={receiptLive} onClose={() => setReceipt(null)} />}
+      {calcOpen && <PosCalculator onClose={() => setCalcOpen(false)} />}
     </div>
   );
 }

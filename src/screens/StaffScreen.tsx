@@ -28,7 +28,7 @@ const roleColor: Record<StaffMember["role"], string> = {
 };
 
 export default function StaffScreen() {
-  const { staff, staffLogs, branches, addStaff, toggleStaff, notify, online } = useAppData();
+  const { staff, staffLogs, branches, inviteStaff, toggleStaff, notify, online } = useAppData();
   const [tab, setTab] = useState<Tab>("list");
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -212,8 +212,13 @@ export default function StaffScreen() {
           onSubmit={(data) => {
             const idByName = new Map(branches.map((b) => [b.name, b.id]));
             const branchIds = data.branches.map((n) => idByName.get(n)).filter((id): id is string => Boolean(id));
-            addStaff({ ...data, branchIds, status: "active", lastLogin: "Never" });
-            setCreating(false);
+            // Invitation flow: the backend emails the invitee a join link; the modal
+            // shows the outcome (and a copyable link) instead of closing blindly.
+            return inviteStaff({
+              email: data.email,
+              role: data.role === "manager" ? "manager" : "cashier",
+              branchIds: branchIds.length > 0 ? branchIds : branches.map((b) => b.id).slice(0, 1),
+            });
           }}
         />
       )}
@@ -221,33 +226,77 @@ export default function StaffScreen() {
   );
 }
 
-function AddStaffModal({ branchNames, onClose, onSubmit }: { branchNames: string[]; onClose: () => void; onSubmit: (data: { name: string; email: string; phone: string; role: Role; branches: string[] }) => void }) {
-  const [name, setName] = useState("");
+function AddStaffModal({ branchNames, onClose, onSubmit }: { branchNames: string[]; onClose: () => void; onSubmit: (data: { email: string; role: Role; branches: string[] }) => Promise<{ inviteUrl: string; emailSent: boolean } | { error: string }> }) {
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [role, setRole] = useState<Role>("cashier");
   const [branch, setBranch] = useState(branchNames[0] ?? "");
-  const valid = name.trim() && email.trim();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ inviteUrl: string; emailSent: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const submit = async () => {
+    setSubmitting(true);
+    setError(null);
+    const outcome = await onSubmit({ email: email.trim(), role, branches: branch ? [branch] : [] });
+    setSubmitting(false);
+    if ("error" in outcome) setError(outcome.error);
+    else setResult(outcome);
+  };
+
+  const copyLink = async () => {
+    if (!result?.inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(result.inviteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore clipboard failures
+    }
+  };
+
+  if (result) {
+    return (
+      <Modal
+        title="Invitation sent"
+        description={result.emailSent ? `An invitation email was sent to ${email.trim()}.` : `Invitation created for ${email.trim()} — email delivery couldn't be confirmed, share the link below.`}
+        size="lg"
+        onClose={onClose}
+        footer={<button onClick={onClose} className="dashboard-action-primary">Done</button>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-[#64748b]">
+            The invitee opens the link, signs in or creates their FahamPesa account with this email (setting their password), and gets access limited to their <span className="font-semibold capitalize">{role}</span> role. They'll appear under Staff once they accept.
+          </p>
+          {result.inviteUrl && (
+            <div className="flex items-center gap-2">
+              <input readOnly value={result.inviteUrl} onFocus={(e) => e.currentTarget.select()} className="dashboard-field h-10 flex-1 px-3 text-sm" />
+              <button onClick={() => void copyLink()} className="dashboard-action-muted whitespace-nowrap">{copied ? "Copied!" : "Copy link"}</button>
+            </div>
+          )}
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
-      title="Add staff member"
-      description="Invite a manager or cashier"
+      title="Invite staff member"
+      description="They'll receive an email with a link to join this business"
       size="lg"
       onClose={onClose}
       footer={
         <>
           <button onClick={onClose} className="dashboard-action-muted">Cancel</button>
-          <button disabled={!valid} onClick={() => onSubmit({ name: name.trim(), email: email.trim(), phone: phone.trim() || "—", role, branches: branch ? [branch] : [] })} className="dashboard-action-primary disabled:opacity-50">
-            Add staff
+          <button disabled={!valid || submitting} onClick={() => void submit()} className="dashboard-action-primary disabled:opacity-50">
+            {submitting ? "Sending…" : "Send invitation"}
           </button>
         </>
       }
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Full name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Team member name" /></Field>
-        <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@business.co.ke" /></Field>
-        <Field label="Phone"><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+254 …" /></Field>
+        <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@business.com" /></Field>
         <Field label="Role">
           <SelectInput value={role} onChange={(e) => setRole(e.target.value as Role)}>
             <option value="manager">Manager</option>
@@ -260,6 +309,11 @@ function AddStaffModal({ branchNames, onClose, onSubmit }: { branchNames: string
           </SelectInput>
         </Field>
       </div>
+      {error && (
+        <div className="mt-4 rounded-[10px] border border-[#fecaca] bg-[#fff1ee] px-3 py-2 text-sm text-[#b42318]">
+          {error}
+        </div>
+      )}
     </Modal>
   );
 }

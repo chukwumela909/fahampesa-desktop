@@ -186,6 +186,7 @@ export function adaptDebtor(raw: Raw, branchId: string): Debtor {
     totalPaid: num(raw.totalPayments),
     status: status === "outstanding" || status === "overdue" ? status : "clear",
     active: raw.isActive !== false,
+    note: raw.note ? str(raw.note) : undefined,
   };
 }
 
@@ -300,7 +301,9 @@ export function adaptBranch(raw: Raw): Branch {
     name: str(raw.name, "Branch"),
     code: str(raw.branchCode ?? raw.code, "—"),
     status: str(raw.status, "active") === "active" ? "active" : "disabled",
+    address: str(raw.location?.address ?? raw.address, ""),
     city: str(raw.location?.city ?? raw.city, "—"),
+    country: str(raw.location?.country ?? raw.country, ""),
     assignedRoles: ["owner"],
     type: (BRANCH_TYPES.includes(type as BranchType) ? type : "BRANCH") as BranchType,
     phone: str(raw.contact?.phone ?? raw.phone, "—"),

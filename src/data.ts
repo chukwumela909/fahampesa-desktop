@@ -29,7 +29,11 @@ export interface Branch {
   name: string;
   code: string;
   status: BranchStatus;
+  /** Street address as stored on the backend (location.address); empty when unknown. */
+  address: string;
   city: string;
+  /** Country as stored on the backend (location.country); empty when unknown. */
+  country: string;
   assignedRoles: Role[];
   type: BranchType;
   phone: string;
@@ -199,6 +203,8 @@ export interface Debtor {
   totalPaid?: number;
   status?: "clear" | "outstanding" | "overdue";
   active?: boolean;
+  /** Free-form note stored on the backend. */
+  note?: string;
 }
 
 export interface Expense {

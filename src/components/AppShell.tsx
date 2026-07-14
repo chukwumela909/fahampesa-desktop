@@ -19,6 +19,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { Zap } from "lucide-react";
 import type { Branch, ScreenKey } from "@/data";
+import { displayBranchName } from "@/lib/utils";
 import SyncStatus from "@/components/SyncStatus";
 
 interface NavItem {
@@ -212,7 +213,7 @@ export default function AppShell({
                     }`}
                   >
                     <BuildingOfficeIcon className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline truncate max-w-32">{currentBranch?.name || "Select Branch"}</span>
+                    <span className="hidden sm:inline truncate max-w-32">{currentBranch ? displayBranchName(currentBranch.name, currentBranch.type) : "Select Branch"}</span>
                     {branches.length > 1 && <ChevronDownIcon className="h-4 w-4 ml-1 flex-shrink-0" />}
                   </button>
 
@@ -237,7 +238,7 @@ export default function AppShell({
                                 className={`h-4 w-4 mr-2 ${branchId === branch.id ? "text-[#004aad]" : "text-[#94a3b8]"}`}
                               />
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium truncate">{branch.name}</div>
+                                <div className="font-medium truncate">{displayBranchName(branch.name, branch.type)}</div>
                                 <div className="text-xs text-[#94a3b8] truncate">{branch.code}</div>
                               </div>
                               {branchId === branch.id && <CheckIcon className="h-4 w-4 text-[#004aad] flex-shrink-0 ml-2" />}

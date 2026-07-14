@@ -147,6 +147,20 @@ function expensePaymentEnum(label: string): string {
   return value === "credit" ? "other" : value;
 }
 
+/** Translate backend transfer errors into actionable copy. */
+function transferErrorMessage(error: unknown): string {
+  if (isBackendApiError(error)) {
+    if (error.code === "transfer_inventory_missing") {
+      return "A selected product isn't set up in both branches yet. Add it to the destination branch first, then transfer.";
+    }
+    if (error.code === "insufficient_stock") {
+      return "Not enough available stock in the source branch for that quantity.";
+    }
+    return error.message || "Couldn't create transfer";
+  }
+  return "Couldn't create transfer — check your connection and try again.";
+}
+
 export interface CompleteSaleLine {
   productId: string;
   productName: string;
@@ -218,7 +232,8 @@ interface AppDataValue {
   deleteProduct: (id: string) => void;
   adjustStock: (id: string, newQuantity: number, reason?: string, notes?: string) => void;
 
-  createTransfer: (input: { fromBranchId: string; toBranchId: string; items: Array<{ productId: string; quantity: number }>; notes?: string }) => Promise<void>;
+  /** Resolves to null on success, or a human-readable error message on failure. */
+  createTransfer: (input: { fromBranchId: string; toBranchId: string; items: Array<{ productId: string; quantity: number }>; notes?: string }) => Promise<string | null>;
   transferAction: (id: string, action: "approve" | "ship" | "receive" | "cancel") => Promise<void>;
 
   addSupplier: (data: Omit<Supplier, "id">) => void;
@@ -231,6 +246,9 @@ interface AppDataValue {
   recordDebtorPayment: (id: string, amount: number, method?: string, reference?: string) => void;
 
   addStaff: (data: Omit<StaffMember, "id">) => void;
+  /** Online-only. Creates a backend staff invitation (which emails the invitee a join
+   *  link) and resolves with the link + email status, or an error message. */
+  inviteStaff: (input: { email: string; role: "manager" | "cashier"; branchIds: string[] }) => Promise<{ inviteUrl: string; emailSent: boolean } | { error: string }>;
   toggleStaff: (id: string) => void;
   deleteStaff: (id: string) => void;
 
@@ -739,8 +757,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const trRaw = await ep.listTransfers().catch(() => null);
         if (trRaw) setTransfers(trRaw.map(adaptTransfer));
         notify("Transfer created");
+        return null;
       } catch (error) {
-        notify(isBackendApiError(error) ? error.message : "Couldn't create transfer");
+        // Return the reason so the transfer modal can stay open and show it —
+        // a transient toast alone read as "nothing happened".
+        const message = transferErrorMessage(error);
+        notify(message);
+        return message;
       }
     },
     [notify],
@@ -853,8 +876,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const row: Debtor = { ...data, id };
       setDebtors((cur) => [row, ...cur]);
       void patchCache("debtors", row);
-      // Backend persists name/phone/email/creditLimit/dueDate (no opening-debt field — debt accrues via credit sales).
-      void enqueue({ commandId: id, idempotencyKey: id, entityType: "debtor", entityId: id, operation: "create", branchId: activeBranch.current, baseVersion: null, payload: { name: data.name, phone: data.phone, email: data.email || undefined, creditLimit: data.creditLimit, dueDate: data.dueDate || undefined } });
+      // Backend persists name/phone/email/creditLimit/dueDate plus an optional note and
+      // openingDebt (pre-existing debt applied once to the balance at creation).
+      void enqueue({ commandId: id, idempotencyKey: id, entityType: "debtor", entityId: id, operation: "create", branchId: activeBranch.current, baseVersion: null, payload: { name: data.name, phone: data.phone, email: data.email || undefined, creditLimit: data.creditLimit, dueDate: data.dueDate || undefined, note: data.note || undefined, openingDebt: data.currentDebt > 0 ? data.currentDebt : undefined } });
       notify(`Added debtor "${data.name}"`);
     },
     [enqueue, notify],
@@ -865,7 +889,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       let updated: Debtor | undefined;
       setDebtors((cur) => cur.map((d) => (d.id === id ? (updated = { ...d, ...data }) : d)));
       if (updated) void patchCache("debtors", updated);
-      void enqueue({ commandId: newId(), idempotencyKey: newId(), entityType: "debtor", entityId: id, operation: "update", branchId: activeBranch.current, baseVersion: null, payload: { name: data.name, phone: data.phone, email: data.email || undefined, creditLimit: data.creditLimit, dueDate: data.dueDate || undefined, isActive: data.active } });
+      void enqueue({ commandId: newId(), idempotencyKey: newId(), entityType: "debtor", entityId: id, operation: "update", branchId: activeBranch.current, baseVersion: null, payload: { name: data.name, phone: data.phone, email: data.email || undefined, creditLimit: data.creditLimit, dueDate: data.dueDate || undefined, note: typeof data.note === "string" ? data.note : undefined, isActive: data.active } });
       notify("Debtor updated");
     },
     [enqueue, notify],
@@ -893,6 +917,38 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       notify(`Added "${data.name}"`);
     },
     [enqueue, notify],
+  );
+
+  // Same permission sets the web app grants when inviting staff.
+  const inviteStaff = useCallback<AppDataValue["inviteStaff"]>(
+    async (input) => {
+      const permissions =
+        input.role === "cashier"
+          ? ["sales"]
+          : [
+              "dashboard:read", "sales:create", "sales:read", "sales:void",
+              "inventory:read", "inventory:adjust",
+              "products:read", "products:create", "products:update",
+              "customers:read", "customers:create", "customers:update",
+              "transfers:create", "transfers:approve", "transfers:receive",
+              "staff:read", "staff:manage_branch", "reports:full_read",
+              "expenses:read", "expenses:create",
+              "settings:basic_access", "settings:account_read", "settings:business_read",
+              "settings:devices_read", "settings:data_sync_read", "settings:pricing_read",
+              "settings:support_read",
+            ];
+      try {
+        const raw = await ep.createStaffInvitation({ email: input.email, role: input.role, branchIds: input.branchIds, permissions });
+        const emailSent = Boolean(raw.emailSent);
+        notify(emailSent ? `Invitation email sent to ${input.email}` : "Invitation created — share the invite link");
+        return { inviteUrl: String(raw.inviteUrl ?? ""), emailSent };
+      } catch (error) {
+        const message = isBackendApiError(error) ? error.message : "Couldn't send the invitation — check your connection and try again.";
+        notify(message);
+        return { error: message };
+      }
+    },
+    [notify],
   );
 
   const toggleStaff = useCallback<AppDataValue["toggleStaff"]>(
@@ -943,7 +999,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         operation: "create",
         branchId: id,
         baseVersion: null,
-        payload: { name: data.name, branchCode: data.code, branchType: data.type, location: { address: data.city, city: data.city }, contact: branchContactPayload(data.phone, data.email) },
+        payload: {
+          name: data.name,
+          branchCode: data.code,
+          branchType: data.type,
+          // Real street address/country (backend requires a non-empty address).
+          location: {
+            address: data.address || data.city || data.name,
+            ...(data.city ? { city: data.city } : {}),
+            ...(data.country ? { country: data.country } : {}),
+          },
+          contact: branchContactPayload(data.phone, data.email),
+        },
       });
       notify(`Added branch "${data.name}"`);
     },
@@ -963,12 +1030,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         operation: "update",
         branchId: id,
         baseVersion: null,
-        // Include location so city edits persist (previously dropped), and sanitize contact.
+        // Include location so address/city/country edits persist, and sanitize contact.
         payload: {
           name: data.name,
           branchCode: data.code,
           branchType: data.type,
-          ...(data.city ? { location: { address: data.city, city: data.city } } : {}),
+          ...(data.address || data.city || data.country
+            ? {
+                location: {
+                  address: data.address || data.city || data.name || "Branch",
+                  ...(data.city ? { city: data.city } : {}),
+                  ...(data.country ? { country: data.country } : {}),
+                },
+              }
+            : {}),
           contact: branchContactPayload(data.phone, data.email),
         },
       });
@@ -1251,7 +1326,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       addProduct, updateProduct, deleteProduct, adjustStock, createTransfer, transferAction,
       addSupplier, updateSupplier, deleteSupplier, recordSupplierPayment,
       addDebtor, updateDebtor, recordDebtorPayment,
-      addStaff, toggleStaff, deleteStaff,
+      addStaff, inviteStaff, toggleStaff, deleteStaff,
       addBranch, updateBranch, deleteBranch, addExpense, updateExpense, deleteExpense, completeSale, refundSale, deleteSale,
       heldSales, holdSale, removeHeld,
       updateSettings,
@@ -1261,7 +1336,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       online, syncStatus, queueCount, lastSyncAt, failures, writeWindowExpired,
       bootstrap, refresh, syncNow, retryFailed, notify,
       addProduct, updateProduct, deleteProduct, adjustStock, createTransfer, transferAction, addSupplier, updateSupplier, deleteSupplier, recordSupplierPayment,
-      addDebtor, updateDebtor, recordDebtorPayment, addStaff, toggleStaff, deleteStaff, addBranch, updateBranch, deleteBranch,
+      addDebtor, updateDebtor, recordDebtorPayment, addStaff, inviteStaff, toggleStaff, deleteStaff, addBranch, updateBranch, deleteBranch,
       addExpense, updateExpense, deleteExpense, completeSale, refundSale, deleteSale, heldSales, holdSale, removeHeld,
       updateSettings,
     ],

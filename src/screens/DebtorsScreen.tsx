@@ -117,7 +117,7 @@ export default function DebtorsScreen() {
         </div>
       )}
 
-      {creating && <DebtorModal title="Add New Debtor" onClose={() => setCreating(false)} onSubmit={(d) => { addDebtor({ ...d, currentDebt: 0, risk: riskFor(0, d.creditLimit) }); setCreating(false); }} />}
+      {creating && <DebtorModal title="Add New Debtor" onClose={() => setCreating(false)} onSubmit={(d) => { const opening = d.openingDebt ?? 0; addDebtor({ ...d, currentDebt: opening, risk: riskFor(opening, d.creditLimit) }); setCreating(false); }} />}
       {editing && <DebtorModal title="Edit debtor" initial={editing} onClose={() => setEditing(null)} onSubmit={(d) => { updateDebtor(editing.id, d); setEditing(null); }} />}
       {paying && <PaymentModal debtor={paying} onClose={() => setPaying(null)} onSubmit={(amount, method, ref) => { recordDebtorPayment(paying.id, amount, method, ref); setPaying(null); }} />}
       {viewing && <DebtorDetailModal debtor={viewing} onClose={() => setViewing(null)} onPay={() => { setPaying(viewing); setViewing(null); }} />}
@@ -125,7 +125,7 @@ export default function DebtorsScreen() {
   );
 }
 
-type DebtorFormData = { name: string; phone: string; email?: string; creditLimit: number; dueDate?: string };
+type DebtorFormData = { name: string; phone: string; email?: string; creditLimit: number; dueDate?: string; note?: string; openingDebt?: number };
 
 function DebtorModal({ title, initial, onClose, onSubmit }: { title: string; initial?: Debtor; onClose: () => void; onSubmit: (d: DebtorFormData) => void }) {
   const [name, setName] = useState(initial?.name ?? "");
@@ -133,18 +133,30 @@ function DebtorModal({ title, initial, onClose, onSubmit }: { title: string; ini
   const [email, setEmail] = useState(initial?.email ?? "");
   const [creditLimit, setCreditLimit] = useState(String(initial?.creditLimit ?? ""));
   const [dueDate, setDueDate] = useState(initial?.dueDate ? initial.dueDate.slice(0, 10) : "");
-  const valid = name.trim() && Number(creditLimit) > 0;
+  const [note, setNote] = useState(initial?.note ?? "");
+  // Opening debt is create-only: editing a debtor never rewrites their balance.
+  const isEdit = Boolean(initial);
+  const [openingDebt, setOpeningDebt] = useState("");
+  const openingDebtNum = Number(openingDebt) || 0;
+  const valid = name.trim() && Number(creditLimit) > 0 && (isEdit || openingDebtNum <= (Number(creditLimit) || 0));
   return (
     <Modal title={title} description="Create a credit customer" onClose={onClose}
-      footer={<><button onClick={onClose} className="dashboard-action-muted">Cancel</button><button disabled={!valid} onClick={() => onSubmit({ name: name.trim(), phone: phone.trim() || "—", email: email.trim() || undefined, creditLimit: Number(creditLimit) || 0, dueDate: dueDate || undefined })} className="dashboard-action-primary disabled:opacity-50">Save debtor</button></>}>
+      footer={<><button onClick={onClose} className="dashboard-action-muted">Cancel</button><button disabled={!valid} onClick={() => onSubmit({ name: name.trim(), phone: phone.trim() || "—", email: email.trim() || undefined, creditLimit: Number(creditLimit) || 0, dueDate: dueDate || undefined, note: note.trim() || (isEdit ? "" : undefined), openingDebt: isEdit ? undefined : openingDebtNum > 0 ? openingDebtNum : undefined })} className="dashboard-action-primary disabled:opacity-50">Save debtor</button></>}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Full name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Customer name" /></Field>
-        <Field label="Phone"><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+254 …" /></Field>
+        <Field label="Phone"><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" /></Field>
         <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" /></Field>
         <Field label="Credit limit"><TextInput type="number" min="0" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0" /></Field>
+        {!isEdit && <Field label="Opening debt"><TextInput type="number" min="0" value={openingDebt} onChange={(e) => setOpeningDebt(e.target.value)} placeholder="0 (existing balance, optional)" /></Field>}
         <Field label="Due date"><TextInput type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></Field>
       </div>
-      <p className="mt-3 text-xs text-[#94a3b8]">Debt accrues from credit sales. Installment schedules are managed on the web app.</p>
+      <div className="mt-4">
+        <Field label="Note"><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Optional" className="dashboard-field w-full resize-none px-3 py-2 text-sm" /></Field>
+      </div>
+      {!isEdit && openingDebtNum > (Number(creditLimit) || 0) && Number(creditLimit) > 0 && (
+        <p className="mt-2 text-xs text-[#b42318]">Opening debt can't exceed the credit limit.</p>
+      )}
+      <p className="mt-3 text-xs text-[#94a3b8]">Further debt accrues from credit sales. Installment schedules are managed on the web app.</p>
     </Modal>
   );
 }
@@ -184,6 +196,12 @@ function DebtorDetailModal({ debtor, onClose, onPay }: { debtor: Debtor; onClose
         {debtor.email && <Detail label="Email" value={debtor.email} />}
         {debtor.dueDate && <Detail label="Due date" value={new Date(debtor.dueDate).toLocaleDateString()} />}
       </div>
+      {debtor.note && (
+        <div className="mt-4 rounded-[12px] bg-[#f8fafc] p-4">
+          <p className="text-xs font-medium text-[#64748b]">Note</p>
+          <p className="mt-1 text-sm text-[#0f172a]">{debtor.note}</p>
+        </div>
+      )}
       <p className="mt-4 text-xs text-[#94a3b8]">Payment history syncs from the server; recorded payments reduce the outstanding balance.</p>
     </Modal>
   );

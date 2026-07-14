@@ -75,6 +75,11 @@ export const debtorPayment = (branchId: string, id: string, body: Raw) =>
 
 // ---- staff ----
 export const createStaff = (body: Raw) => api<Raw>("/staff", { method: "POST", body });
+// Invitation flow: the backend emails the invitee a join link (Resend) and the
+// response carries { inviteUrl, emailSent } for the UI to surface/share.
+export const createStaffInvitation = (body: Raw) => api<Raw>("/staff/invitations", { method: "POST", body });
+export const listStaffInvitations = (status?: string) =>
+  api<Raw[]>(`/staff/invitations${status ? `?status=${status}` : ""}`);
 export const updateStaff = (id: string, body: Raw) => api<Raw>(`/staff/${id}`, { method: "PATCH", body });
 export const deleteStaff = (id: string) => api<Raw>(`/staff/${id}`, { method: "DELETE" });
 export const activateStaff = (id: string) => api<Raw>(`/staff/${id}/activate`, { method: "POST" });

@@ -22,6 +22,7 @@ import {
 import type { Branch, BranchType, Product, StaffMember } from "@/data";
 import { useAppData } from "@/store/AppData";
 import { currency, sum } from "@/lib/format";
+import { branchLocation, displayBranchName } from "@/lib/utils";
 import Modal, { Field, SelectInput, TextInput } from "@/components/ui/Modal";
 
 type Tab = "dashboard" | "branches" | "reports";
@@ -198,7 +199,7 @@ export default function BranchesScreen() {
                       <BuildingOfficeIcon className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <p className="text-lg font-bold text-gray-900 group-hover:text-blue-700">{branch.name}</p>
+                      <p className="text-lg font-bold text-gray-900 group-hover:text-blue-700">{displayBranchName(branch.name, branch.type)}</p>
                       <span className="text-xs font-medium text-gray-500">{branch.code} · {branch.type}</span>
                     </div>
                   </div>
@@ -208,7 +209,7 @@ export default function BranchesScreen() {
                 </div>
 
                 <div className="space-y-2">
-                  <Row icon={<MapPinIcon className="h-4 w-4 text-gray-400" />} text={`${branch.city}, Kenya`} />
+                  <Row icon={<MapPinIcon className="h-4 w-4 text-gray-400" />} text={branchLocation(branch)} />
                   <Row icon={<PhoneIcon className="h-4 w-4 text-gray-400" />} text={branch.phone} />
                   <Row icon={<EnvelopeIcon className="h-4 w-4 text-gray-400" />} text={branch.email} />
                 </div>
@@ -378,7 +379,7 @@ function BranchDetail({
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="dashboard-page-title">{branch.name}</h1>
+              <h1 className="dashboard-page-title">{displayBranchName(branch.name, branch.type)}</h1>
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{branch.code}</span>
               <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">{branch.type}</span>
               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
@@ -418,7 +419,7 @@ function BranchDetail({
         <div className="dashboard-panel p-6">
           <h3 className="dashboard-section-title mb-4">Location &amp; Contact</h3>
           <div className="space-y-4">
-            <DetailRow icon={<MapPinIcon className="h-4 w-4 text-gray-400" />} label="Location" value={`${branch.city}, Kenya`} />
+            <DetailRow icon={<MapPinIcon className="h-4 w-4 text-gray-400" />} label="Location" value={branchLocation(branch)} />
             <DetailRow icon={<PhoneIcon className="h-4 w-4 text-gray-400" />} label="Phone" value={branch.phone} />
             <DetailRow icon={<EnvelopeIcon className="h-4 w-4 text-gray-400" />} label="Email" value={branch.email} />
           </div>
@@ -559,12 +560,16 @@ function DeleteBranchModal({ branch, onClose, onConfirm }: { branch: Branch; onC
   );
 }
 
-type BranchFormData = Pick<Branch, "name" | "code" | "city" | "type" | "phone" | "email" | "manager">;
+type BranchFormData = Pick<Branch, "name" | "code" | "address" | "city" | "country" | "type" | "phone" | "email" | "manager">;
 
 function BranchModal({ title, initial, onClose, onSubmit }: { title: string; initial?: Branch; onClose: () => void; onSubmit: (data: BranchFormData) => void }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [code, setCode] = useState(initial?.code ?? "");
-  const [city, setCity] = useState(initial?.city ?? "Nairobi");
+  // No location defaults: the branch's real address/city/country come from the
+  // user — a Nairobi/Kenya default previously mislabeled non-Kenyan branches.
+  const [address, setAddress] = useState(initial?.address ?? "");
+  const [city, setCity] = useState(initial?.city === "—" ? "" : initial?.city ?? "");
+  const [country, setCountry] = useState(initial?.country ?? "");
   const [type, setType] = useState<BranchType>(initial?.type ?? "BRANCH");
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [email, setEmail] = useState(initial?.email ?? "");
@@ -581,7 +586,7 @@ function BranchModal({ title, initial, onClose, onSubmit }: { title: string; ini
           <button onClick={onClose} className="dashboard-action-muted">Cancel</button>
           <button
             disabled={!valid}
-            onClick={() => onSubmit({ name: name.trim(), code: (code.trim() || name.trim().slice(0, 3)).toUpperCase(), city: city.trim() || "Nairobi", type, phone: phone.trim() || "—", email: email.trim() || "—", manager: manager.trim() || "Unassigned" })}
+            onClick={() => onSubmit({ name: name.trim(), code: (code.trim() || name.trim().slice(0, 3)).toUpperCase(), address: address.trim(), city: city.trim(), country: country.trim(), type, phone: phone.trim() || "—", email: email.trim() || "—", manager: manager.trim() || "Unassigned" })}
             className="dashboard-action-primary disabled:opacity-50"
           >
             Save branch
@@ -592,14 +597,16 @@ function BranchModal({ title, initial, onClose, onSubmit }: { title: string; ini
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Branch name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Karen Outlet" /></Field>
         <Field label="Branch code"><TextInput value={code} onChange={(e) => setCode(e.target.value)} placeholder="Auto if blank" /></Field>
-        <Field label="City"><TextInput value={city} onChange={(e) => setCity(e.target.value)} /></Field>
+        <Field label="Street address"><TextInput value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g. Diamond Plaza, Rumumasi" /></Field>
+        <Field label="City"><TextInput value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Port Harcourt" /></Field>
+        <Field label="Country"><TextInput value={country} onChange={(e) => setCountry(e.target.value)} placeholder="e.g. Nigeria" /></Field>
         <Field label="Type">
           <SelectInput value={type} onChange={(e) => setType(e.target.value as BranchType)}>
             {BRANCH_TYPES.map((t) => <option key={t}>{t}</option>)}
           </SelectInput>
         </Field>
-        <Field label="Phone"><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+254 …" /></Field>
-        <Field label="Email"><TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="branch@business.co.ke" /></Field>
+        <Field label="Phone"><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" /></Field>
+        <Field label="Email"><TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="branch@business.com" /></Field>
         <Field label="Manager"><TextInput value={manager} onChange={(e) => setManager(e.target.value)} placeholder="Manager name" /></Field>
       </div>
     </Modal>

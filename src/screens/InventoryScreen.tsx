@@ -233,7 +233,12 @@ export default function InventoryScreen({ branchId }: { branchId: string }) {
           branches={branches}
           products={products}
           onClose={() => setCreatingTransfer(false)}
-          onSubmit={(input) => { void createTransfer(input); setCreatingTransfer(false); }}
+          onSubmit={async (input) => {
+            // Only close on success; on failure the modal stays open and shows why.
+            const error = await createTransfer(input);
+            if (!error) setCreatingTransfer(false);
+            return error;
+          }}
         />
       )}
     </div>
@@ -277,15 +282,27 @@ function TransferModal({
   branches: { id: string; name: string }[];
   products: Product[];
   onClose: () => void;
-  onSubmit: (input: { fromBranchId: string; toBranchId: string; items: Array<{ productId: string; quantity: number }>; notes?: string }) => void;
+  onSubmit: (input: { fromBranchId: string; toBranchId: string; items: Array<{ productId: string; quantity: number }>; notes?: string }) => Promise<string | null>;
 }) {
   const [from, setFrom] = useState(fromBranchId);
   const [to, setTo] = useState(branches.find((b) => b.id !== fromBranchId)?.id ?? "");
   const [qty, setQty] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const items = Object.entries(qty).map(([productId, q]) => ({ productId, quantity: Number(q) || 0 })).filter((i) => i.quantity > 0);
   const valid = from && to && from !== to && items.length > 0;
+
+  const submit = async () => {
+    setSubmitting(true);
+    setError(null);
+    const failure = await onSubmit({ fromBranchId: from, toBranchId: to, items, notes: notes || undefined });
+    if (failure) {
+      setError(failure);
+      setSubmitting(false);
+    }
+  };
 
   return (
     <Modal
@@ -293,7 +310,7 @@ function TransferModal({
       description="Move stock from one branch to another"
       size="lg"
       onClose={onClose}
-      footer={<><button onClick={onClose} className="dashboard-action-muted">Cancel</button><button disabled={!valid} onClick={() => onSubmit({ fromBranchId: from, toBranchId: to, items, notes: notes || undefined })} className="dashboard-action-primary disabled:opacity-50">Create transfer</button></>}
+      footer={<><button onClick={onClose} className="dashboard-action-muted">Cancel</button><button disabled={!valid || submitting} onClick={() => void submit()} className="dashboard-action-primary disabled:opacity-50">{submitting ? "Creating…" : "Create transfer"}</button></>}
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
@@ -316,6 +333,11 @@ function TransferModal({
           </div>
         </div>
         <Field label="Notes"><TextInput value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" /></Field>
+        {error && (
+          <div className="rounded-[10px] border border-[#fecaca] bg-[#fff1ee] px-3 py-2 text-sm text-[#b42318]">
+            {error}
+          </div>
+        )}
       </div>
     </Modal>
   );

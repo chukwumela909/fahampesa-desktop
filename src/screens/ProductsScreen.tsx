@@ -23,7 +23,28 @@ import { printHtmlBody, escapeHtml } from "@/lib/print";
 import { currency, getCurrencySymbol, sum } from "@/lib/format";
 import Modal, { Field, SelectInput, TextInput } from "@/components/ui/Modal";
 
-const CATEGORIES = ["Pantry", "Household", "Beverage", "Personal Care", "Stationery", "Electronics", "Hardware", "Other"];
+// Same product categories as the web app (src/constants/categories.ts) so the
+// two clients offer an identical dropdown.
+const CATEGORIES = [
+  "General Hardware",
+  "Plumbing",
+  "Electrical",
+  "Tools & Equipment",
+  "Building Materials",
+  "Paints & Finishes",
+  "Safety & Security",
+  "Garden & Outdoor",
+  "Fasteners & Fixings",
+  "Electronics",
+  "Food & Beverages",
+  "Clothing",
+  "Beauty & Health",
+  "Home & Garden",
+  "Sports & Outdoors",
+  "Books & Media",
+  "Automotive",
+  "Toys & Games",
+];
 const UNITS = ["unit", "pcs", "kg", "g", "litre", "ml", "box", "pack", "bottle", "can", "bag", "dozen", "set", "pair", "meter"];
 
 type ProductFilter = "all" | "in" | "low" | "out" | "expiring" | "supplier";
@@ -384,7 +405,10 @@ function ProductModal({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Product name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Premium Rice 5kg" /></Field>
           <Field label="Category">
-            <SelectInput value={category} onChange={(e) => setCategory(e.target.value)}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</SelectInput>
+            {/* Keep a legacy/unknown category selectable when editing an older product. */}
+            <SelectInput value={category} onChange={(e) => setCategory(e.target.value)}>
+              {(CATEGORIES.includes(category) ? CATEGORIES : [category, ...CATEGORIES]).map((c) => <option key={c}>{c}</option>)}
+            </SelectInput>
           </Field>
           <Field label="SKU"><TextInput value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Optional" /></Field>
           <Field label="Barcode">

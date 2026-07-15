@@ -35,7 +35,7 @@ interface SalesScreenProps {
 }
 
 export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, onViewHistory }: SalesScreenProps) {
-  const { products: allProducts, sales: allSales, debtors, settings, completeSale, holdSale, removeHeld, heldSales } = useAppData();
+  const { products: allProducts, sales: allSales, debtors, settings, completeSale, holdSale, removeHeld, heldSales, online, notify } = useAppData();
   // Default tax rate (%) comes from the business's configured VAT rate in settings.
   const defaultTaxRate = settings.taxRate ?? "";
   const products = useMemo(() => allProducts.filter((p) => branchId === "all" || p.branchId === branchId), [allProducts, branchId]);
@@ -170,7 +170,19 @@ export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, 
   }
 
   function resumeHeld(held: HeldSale) {
-    setCart(held.cart);
+    // Stock may have moved while the sale was held; clamp quantities so a resumed
+    // cart can't oversell.
+    const clamped: Record<string, number> = {};
+    let adjusted = false;
+    for (const [pid, qty] of Object.entries(held.cart)) {
+      const product = products.find((p) => p.id === pid);
+      if (!product || product.quantity <= 0) { adjusted = true; continue; }
+      const next = Math.min(qty, product.quantity);
+      if (next !== qty) adjusted = true;
+      clamped[pid] = next;
+    }
+    if (adjusted) notify("Some held items were adjusted to current stock levels");
+    setCart(clamped);
     setLineDiscounts(held.lineDiscounts);
     setCustomerName(held.customerName);
     setDebtorId(held.debtorId);
@@ -222,7 +234,8 @@ export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, 
     }, 400);
   }
 
-  const completeDisabled = submitting || cartItems.length === 0 || (paymentMethod === "CREDIT" && !debtorId);
+  // totalAmount > 0: a mis-tap or over-discount shouldn't record a 0-value sale.
+  const completeDisabled = submitting || cartItems.length === 0 || totalAmount <= 0 || (paymentMethod === "CREDIT" && !debtorId);
 
   return (
     <div className="min-h-screen overflow-hidden bg-[#f6f8fb] text-[#0f172a]" style={{ fontFamily: "var(--font-dm-sans)" }}>
@@ -240,7 +253,10 @@ export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, 
           <div className="hidden h-8 w-px bg-[#1f2a4a] sm:block" />
           <div className="hidden items-center gap-3 text-sm font-medium md:flex"><User className="h-5 w-5" /><span>User: {cashierName}</span></div>
           <div className="hidden h-8 w-px bg-[#1f2a4a] md:block" />
-          <div className="hidden items-center gap-3 text-sm font-medium sm:flex"><Wifi className="h-5 w-5 text-[#20c75a]" /><span>Online</span></div>
+          <div className="hidden items-center gap-3 text-sm font-medium sm:flex" title={online ? "Connected to the server" : "Offline — sales are saved locally and sync when you reconnect"}>
+            <Wifi className={`h-5 w-5 ${online ? "text-[#20c75a]" : "text-[#f97316]"}`} />
+            <span>{online ? "Online" : "Offline"}</span>
+          </div>
           <div className="h-8 w-px bg-[#1f2a4a]" />
           <div className="text-center leading-tight"><div className="text-[18px] font-bold">{displayTime}</div><div className="text-[14px] text-[#94a3b8]">{displayDate}</div></div>
           <div className="h-8 w-px bg-[#1f2a4a]" />
@@ -436,10 +452,13 @@ export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, 
 
             <div className="mt-3 flex shrink-0 gap-2">
               <button type="button" onClick={onHoldSale} disabled={cartItems.length === 0} className="dashboard-action-secondary h-12 flex-1 disabled:opacity-50">Hold</button>
-              <button type="button" onClick={onCompleteSale} disabled={completeDisabled} className="dashboard-action-primary flex h-12 flex-[2] text-[16px] disabled:bg-[#aeb9d2]">
+              <button type="button" onClick={onCompleteSale} disabled={completeDisabled} title={paymentMethod === "CREDIT" && !debtorId ? "Select a debtor to complete a credit sale" : undefined} className="dashboard-action-primary flex h-12 flex-[2] text-[16px] disabled:bg-[#aeb9d2]">
                 {submitting && <Loader2 className="h-5 w-5 animate-spin" />} Complete Sale
               </button>
             </div>
+            {paymentMethod === "CREDIT" && !debtorId && (
+              <p className="mt-2 shrink-0 text-xs font-medium text-[#b45309]">Credit sales need a debtor — pick one above or add them from the Debtors screen.</p>
+            )}
             </>
             )}
           </section>

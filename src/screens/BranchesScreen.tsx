@@ -37,7 +37,7 @@ const typeGradient: Record<BranchType, string> = {
 };
 
 export default function BranchesScreen() {
-  const { branches, products, staff, addBranch, updateBranch, deleteBranch, notify, online } = useAppData();
+  const { branches, products, staff, addBranch, updateBranch, deleteBranch, notify, online, syncNow } = useAppData();
   const [tab, setTab] = useState<Tab>("branches");
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -125,7 +125,7 @@ export default function BranchesScreen() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => notify("Branches refreshed")} className="dashboard-action-muted">
+          <button onClick={() => { notify("Refreshing…"); void syncNow(); }} className="dashboard-action-muted">
             <ArrowPathIcon className="mr-2 h-4 w-4" /> Refresh
           </button>
           <button onClick={() => setCreating(true)} disabled={!online} title={online ? "Add branch" : "Online only"} className="dashboard-action-primary disabled:cursor-not-allowed disabled:opacity-50">

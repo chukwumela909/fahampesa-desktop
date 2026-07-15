@@ -34,6 +34,8 @@ export interface Branch {
   city: string;
   /** Country as stored on the backend (location.country); empty when unknown. */
   country: string;
+  /** Per-branch trading currency (falls back to the business currency when empty). */
+  currency?: string;
   assignedRoles: Role[];
   type: BranchType;
   phone: string;

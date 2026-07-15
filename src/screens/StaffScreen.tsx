@@ -28,10 +28,11 @@ const roleColor: Record<StaffMember["role"], string> = {
 };
 
 export default function StaffScreen() {
-  const { staff, staffLogs, branches, inviteStaff, toggleStaff, notify, online } = useAppData();
+  const { staff, staffLogs, branches, inviteStaff, toggleStaff, notify, online, syncNow } = useAppData();
   const [tab, setTab] = useState<Tab>("list");
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const [viewing, setViewing] = useState<StaffMember | null>(null);
 
   const active = staff.filter((s) => s.status === "active").length;
   const managers = staff.filter((s) => s.role === "manager").length;
@@ -58,7 +59,7 @@ export default function StaffScreen() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => notify("Staff refreshed")} className="dashboard-action-muted">
+          <button onClick={() => { notify("Refreshing…"); void syncNow(); }} className="dashboard-action-muted">
             <RefreshCw className="mr-2 h-4 w-4" /> Refresh
           </button>
           <button onClick={() => setCreating(true)} disabled={!online} title={online ? "Add staff member" : "Online only"} className="dashboard-action-primary disabled:cursor-not-allowed disabled:opacity-50">
@@ -139,7 +140,7 @@ export default function StaffScreen() {
                 </div>
 
                 <div className="mt-4 flex gap-2">
-                  <button onClick={() => notify(`Viewing ${member.name}`)} className="inline-flex flex-1 items-center justify-center gap-1 rounded-[10px] border border-[#e6ebf2] py-2 text-sm font-medium text-[#334155] transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
+                  <button onClick={() => setViewing(member)} className="inline-flex flex-1 items-center justify-center gap-1 rounded-[10px] border border-[#e6ebf2] py-2 text-sm font-medium text-[#334155] transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
                     <Eye className="h-4 w-4" /> View
                   </button>
                   <button onClick={() => toggleStaff(member.id)} disabled={!online} className="inline-flex items-center justify-center rounded-[10px] border border-[#e6ebf2] px-3 py-2 text-sm font-medium text-[#334155] transition-colors hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-50" title={!online ? "Online only" : member.status === "active" ? "Deactivate" : "Activate"}>
@@ -205,6 +206,22 @@ export default function StaffScreen() {
         </div>
       )}
 
+      {viewing && (
+        <Modal title={viewing.name} description={viewing.role} onClose={() => setViewing(null)}
+          footer={<button onClick={() => setViewing(null)} className="dashboard-action-primary">Close</button>}>
+          <div className="grid grid-cols-2 gap-4">
+            <div><p className="text-xs font-medium text-[#64748b]">Email</p><p className="text-sm font-semibold text-[#0f172a]">{viewing.email || "—"}</p></div>
+            <div><p className="text-xs font-medium text-[#64748b]">Phone</p><p className="text-sm font-semibold text-[#0f172a]">{viewing.phone || "—"}</p></div>
+            <div><p className="text-xs font-medium text-[#64748b]">Role</p><p className="text-sm font-semibold capitalize text-[#0f172a]">{viewing.role}</p></div>
+            <div><p className="text-xs font-medium text-[#64748b]">Status</p><p className="text-sm font-semibold capitalize text-[#0f172a]">{viewing.status}</p></div>
+            <div><p className="text-xs font-medium text-[#64748b]">Last login</p><p className="text-sm font-semibold text-[#0f172a]">{viewing.lastLogin}</p></div>
+            <div>
+              <p className="text-xs font-medium text-[#64748b]">Assigned branches</p>
+              <p className="text-sm font-semibold text-[#0f172a]">{branchesFor(viewing).join(", ") || "None"}</p>
+            </div>
+          </div>
+        </Modal>
+      )}
       {creating && (
         <AddStaffModal
           branchNames={branches.map((b) => b.name)}

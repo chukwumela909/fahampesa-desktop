@@ -337,8 +337,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
       const savedLast = await getMeta<number>("lastSyncAt");
       if (savedLast) setLastSyncAt(savedLast);
-      const pending = await db.outbox.where("status").notEqual("done").count();
-      setQueueCount(pending);
+      // Failed rows are NOT "queued" — they need review. Counting them as queued
+      // (and losing the in-memory failures list on restart) made server-rejected
+      // writes look like they'd sync automatically when they never would.
+      await refreshQueueAndFailures();
     })();
   }, []);
 
@@ -353,8 +355,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return Date.now() - lastSyncAt > WRITE_WINDOW_MS;
   }, [online, lastSyncAt]);
 
-  async function refreshQueueCount() {
-    setQueueCount(await db.outbox.count());
+  async function refreshQueueAndFailures() {
+    const all = await db.outbox.toArray();
+    const failed = all.filter((cmd) => cmd.status === "failed");
+    setQueueCount(all.length - failed.length);
+    setFailures(
+      failed.map((cmd) => ({
+        commandId: cmd.commandId,
+        label: `${cmd.entityType} ${cmd.operation}`,
+        error: cmd.error ?? "Sync failed",
+      })),
+    );
   }
 
   // ---- account-level data (settings/profile) — not branch-scoped ----
@@ -449,6 +460,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           const rows = brRaw.map(adaptBranch);
           await replaceCache("branches", rows);
           setBranches(rows);
+          // The active branch's currency wins over the business default (matches the web app).
+          const activeRow = rows.find((b) => b.id === branchId);
+          if (activeRow?.currency) setCurrencySymbol(activeRow.currency);
         }
         if (prRaw) {
           const rows = prRaw.map((r) => adaptProduct(r, branchId));
@@ -534,11 +548,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       case "supplier:payment":
         return ep.supplierPayment(cmd.branchId, cmd.entityId!, payload);
       case "debtor:create":
-        return ep.createDebtor(cmd.branchId, payload);
+        return ep.createDebtor(cmd.branchId, payload, cmd.idempotencyKey);
       case "debtor:update":
         return ep.updateDebtor(cmd.branchId, cmd.entityId!, payload);
       case "debtor:payment":
-        return ep.debtorPayment(cmd.branchId, cmd.entityId!, payload);
+        // The outbox key makes offline retries safe: a replayed payment can't hit the balance twice.
+        return ep.debtorPayment(cmd.branchId, cmd.entityId!, payload, cmd.idempotencyKey);
       case "staff:create":
         return ep.createStaff(payload);
       case "staff:update":
@@ -565,7 +580,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         if (cmd.status === "failed") continue;
         if (Date.now() - cmd.clientTimestamp > WRITE_WINDOW_MS) {
           await db.outbox.update(cmd.commandId, { status: "failed", error: "Offline write window (24h) expired" });
-          setFailures((f) => [...f, { commandId: cmd.commandId, label: `${cmd.entityType} ${cmd.operation}`, error: "Write window expired" }]);
           continue;
         }
         try {
@@ -588,7 +602,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           if (isBackendApiError(error)) {
             // Server rejected (validation, insufficient stock, etc.) — needs review.
             await db.outbox.update(cmd.commandId, { status: "failed", error: error.message });
-            setFailures((f) => [...f, { commandId: cmd.commandId, label: `${cmd.entityType} ${cmd.operation}`, error: error.message }]);
           } else {
             // Network blip — leave pending and stop draining.
             await db.outbox.update(cmd.commandId, { status: "pending" });
@@ -596,7 +609,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           }
         }
       }
-      await refreshQueueCount();
+      await refreshQueueAndFailures();
       await refresh(activeBranch.current);
     } finally {
       draining.current = false;
@@ -611,7 +624,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const enqueue = useCallback(
     async (cmd: Omit<OutboxCommand, "status" | "attempts" | "clientTimestamp">) => {
       await db.outbox.put({ ...cmd, status: "pending", attempts: 0, clientTimestamp: Date.now() });
-      await refreshQueueCount();
+      await refreshQueueAndFailures();
       void drain();
     },
     [drain],
@@ -776,7 +789,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         await ep.transferAction(id, action);
         const trRaw = await ep.listTransfers().catch(() => null);
         if (trRaw) setTransfers(trRaw.map(adaptTransfer));
-        notify(`Transfer ${action} done`);
+        notify(
+          action === "approve" ? "Transfer approved" : action === "ship" ? "Transfer shipped" : action === "receive" ? "Transfer received — stock updated" : "Transfer cancelled",
+        );
       } catch (error) {
         notify(isBackendApiError(error) ? error.message : `Couldn't ${action} transfer`);
       }
@@ -1284,12 +1299,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         void setMeta("settings", next);
         return next;
       });
-      // Settings are account-level and low-stakes — pushed directly when online (not queued).
+      // Settings are account-level and low-stakes — pushed directly when online (not queued),
+      // but a server rejection must not be silently reported as "saved".
       if (online) {
         const body = settingsToBackendBody(patch);
-        if (Object.keys(body).length > 0) void ep.updateSettings(body).catch(() => {});
+        if (Object.keys(body).length > 0) void ep.updateSettings(body).catch(() => notify("Couldn't save settings to the server — they're kept on this device; try again later"));
         const profile = profileToBackendBody(patch);
-        if (Object.keys(profile).length > 0) void ep.updateMe(profile).catch(() => {});
+        if (Object.keys(profile).length > 0) void ep.updateMe(profile).catch(() => notify("Couldn't save your profile to the server — kept on this device; try again later"));
       }
     },
     [online],
@@ -1315,7 +1331,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         cmd.error = undefined;
       });
     setFailures([]);
-    await refreshQueueCount();
+    await refreshQueueAndFailures();
     void drain();
   }, [drain]);
 

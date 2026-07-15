@@ -204,11 +204,10 @@ export default function DevicesPanel({ notify }: { notify: (message: string) => 
           <Stat label="Offline" value={offline} tone="text-[#64748b]" />
           <Stat label="Errors" value={errored} tone="text-[#dc2626]" />
         </div>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button onClick={() => notify("Running device diagnostics…")} className="dashboard-action-muted">Run diagnostics</button>
-          <button onClick={() => { update("pairedDevices", settings.pairedDevices.map((d) => ({ ...d, status: "connected" as DeviceStatus }))); notify("Connections reset"); }} className="dashboard-action-muted">Reset connections</button>
-          <button onClick={() => notify("Device cache cleared")} className="dashboard-action-muted">Clear cache</button>
-        </div>
+        {/* Diagnostics/cache/reset buttons removed: they only fired toasts (and "reset"
+            blindly marked every device connected), faking hardware health that was never
+            checked. Real device integration can reintroduce them with actual probes. */}
+        <p className="mt-4 text-xs text-[#94a3b8]">Device status is reported by each device when it connects. Automatic discovery and diagnostics aren't available yet.</p>
       </Panel>
     </div>
   );

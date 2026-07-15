@@ -18,7 +18,7 @@ export default function NotificationsScreen({ branchId, onScreenChange }: { bran
   const notes = useMemo<Note[]>(() => {
     const list: Note[] = [];
     failures.forEach((f) =>
-      list.push({ id: `fail-${f.commandId}`, tone: "red", icon: <CloudIcon className="h-5 w-5" />, title: "Sync failed — needs review", detail: `${f.label}: ${f.error}`, action: { label: "Open sync", screen: "dashboard" } }),
+      list.push({ id: `fail-${f.commandId}`, tone: "red", icon: <CloudIcon className="h-5 w-5" />, title: "Sync failed — needs review", detail: `${f.label}: ${f.error}`, action: { label: "Open dashboard", screen: "dashboard" } }),
     );
     if (queueCount > 0) list.push({ id: "queued", tone: "blue", icon: <CloudIcon className="h-5 w-5" />, title: `${queueCount} change${queueCount === 1 ? "" : "s"} queued`, detail: online ? "Syncing to the server…" : "Will sync when you reconnect." });
     alerts.filter((a) => branchId === "all" || a.branchId === branchId).forEach((a) =>

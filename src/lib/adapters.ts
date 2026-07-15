@@ -306,6 +306,7 @@ export function adaptBranch(raw: Raw): Branch {
     address: str(raw.location?.address ?? raw.address, ""),
     city: str(raw.location?.city ?? raw.city, "—"),
     country: str(raw.location?.country ?? raw.country, ""),
+    currency: raw.currency ? str(raw.currency) : undefined,
     assignedRoles: ["owner"],
     type: (BRANCH_TYPES.includes(type as BranchType) ? type : "BRANCH") as BranchType,
     phone: str(raw.contact?.phone ?? raw.phone, "—"),

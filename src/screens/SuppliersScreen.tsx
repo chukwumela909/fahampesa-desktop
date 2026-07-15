@@ -19,7 +19,7 @@ import Modal, { Field, TextInput } from "@/components/ui/Modal";
 const CATEGORY_OPTIONS = ["General", "Pantry", "Beverage", "Household", "Electronics", "Hardware", "Packaging", "Raw Materials", "Office Supplies", "Services", "Other"];
 
 export default function SuppliersScreen({ branchId }: { branchId: string }) {
-  const { suppliers, addSupplier, updateSupplier, deleteSupplier, notify } = useAppData();
+  const { suppliers, addSupplier, updateSupplier, deleteSupplier, notify, syncNow } = useAppData();
   const confirm = useConfirm();
   const branchSuppliers = suppliers.filter((s) => branchId === "all" || s.branchId === branchId);
   const [search, setSearch] = useState("");
@@ -40,7 +40,7 @@ export default function SuppliersScreen({ branchId }: { branchId: string }) {
           <div><h1 className="dashboard-page-title">Suppliers</h1><p className="dashboard-page-subtitle mt-1">{branchSuppliers.length} supplier{branchSuppliers.length === 1 ? "" : "s"} on file</p></div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={() => notify("Suppliers refreshed")} className="dashboard-action-muted"><ArrowPathIcon className="mr-2 h-4 w-4" /> Refresh</button>
+          <button onClick={() => { notify("Refreshing…"); void syncNow(); }} className="dashboard-action-muted"><ArrowPathIcon className="mr-2 h-4 w-4" /> Refresh</button>
           <button onClick={() => setCreating(true)} className="dashboard-action-primary"><PlusIcon className="mr-2 h-4 w-4" /> Add supplier</button>
         </div>
       </div>
@@ -119,7 +119,7 @@ function SupplierModal({ title, initial, onClose, onSubmit }: { title: string; i
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Supplier name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Nairobi Grain Traders" /></Field>
         <Field label="Contact person"><TextInput value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Full name" /></Field>
-        <Field label="Phone"><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+254 …" /></Field>
+        <Field label="Phone"><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" /></Field>
         <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" /></Field>
         <div className="sm:col-span-2"><Field label="Address"><TextInput value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Optional" /></Field></div>
         <div className="sm:col-span-2"><Field label="Products supplied"><TextInput value={productsSupplied} onChange={(e) => setProductsSupplied(e.target.value)} placeholder="comma, separated" /></Field></div>

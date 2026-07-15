@@ -19,6 +19,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { Zap } from "lucide-react";
 import type { Branch, ScreenKey } from "@/data";
+import { useAppData } from "@/store/AppData";
 import { displayBranchName } from "@/lib/utils";
 import SyncStatus from "@/components/SyncStatus";
 
@@ -48,7 +49,7 @@ export const pageTitles: Record<ScreenKey, { title: string; subtitle?: string }>
   salesHistory: { title: "Sales History", subtitle: "Completed sales & receipts" },
   inventory: { title: "Inventory", subtitle: "Manage Products & Stock" },
   expenses: { title: "Expenses", subtitle: "Track Business Spending" },
-  debtors: { title: "Debtor", subtitle: "Create a new credit customer" },
+  debtors: { title: "Debtors", subtitle: "Track who owes you and their payments" },
   reports: { title: "Reports & Analytics" },
   suppliers: { title: "Suppliers", subtitle: "Manage Business Suppliers" },
   branches: { title: "Branches", subtitle: "Manage Business Locations" },
@@ -89,6 +90,10 @@ export default function AppShell({
   children,
 }: AppShellProps) {
   const visibleNavigationItems = navigationItems.filter((item) => !hiddenScreens.includes(item.key));
+  // Bell badge reflects real attention items (inventory alerts + sync failures) —
+  // an unconditional red dot contradicted the "all caught up" empty state.
+  const { alerts, failures } = useAppData();
+  const hasAttentionItems = alerts.length > 0 || failures.length > 0;
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -281,7 +286,7 @@ export default function AppShell({
               >
                 <span className="relative">
                   <BellIcon className="h-6 w-6 transition-colors" />
-                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-white" />
+                  {hasAttentionItems && <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-white" />}
                 </span>
               </button>
             </div>

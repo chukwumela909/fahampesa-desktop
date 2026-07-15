@@ -66,15 +66,15 @@ export const listSupplierPayments = (branchId: string, id: string) =>
   api<Raw[]>(`${b(branchId)}/suppliers/${id}/payments`);
 
 // ---- debtors ----
-export const createDebtor = (branchId: string, body: Raw) =>
-  api<Raw>(`${b(branchId)}/debtors`, { method: "POST", body });
+export const createDebtor = (branchId: string, body: Raw, idempotencyKey?: string) =>
+  api<Raw>(`${b(branchId)}/debtors`, { method: "POST", body, idempotencyKey });
 export const updateDebtor = (branchId: string, id: string, body: Raw) =>
   api<Raw>(`${b(branchId)}/debtors/${id}`, { method: "PATCH", body });
 // Single debtor incl. its payment history ({ ...debtor, payments: [...] }).
 export const getDebtor = (branchId: string, id: string) =>
   api<Raw>(`${b(branchId)}/debtors/${id}`);
-export const debtorPayment = (branchId: string, id: string, body: Raw) =>
-  api<Raw>(`${b(branchId)}/debtors/${id}/payments`, { method: "POST", body });
+export const debtorPayment = (branchId: string, id: string, body: Raw, idempotencyKey?: string) =>
+  api<Raw>(`${b(branchId)}/debtors/${id}/payments`, { method: "POST", body, idempotencyKey });
 
 // ---- staff ----
 export const createStaff = (body: Raw) => api<Raw>("/staff", { method: "POST", body });

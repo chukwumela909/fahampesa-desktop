@@ -6,7 +6,6 @@ import {
   Database,
   CreditCard,
   Phone,
-  Bell,
   Shield,
   LogOut,
   Save,
@@ -65,11 +64,6 @@ export default function SettingsScreen({ onSignOut }: { onSignOut: () => void })
             <Field label="Phone Number" value={draft.phone} onChange={(v) => set("phone", v)} />
           </Section>
 
-          <Section title="Notification Settings" icon={<Bell className="h-5 w-5 text-[#004aad]" />} description="Choose what you get notified about">
-            <Toggle label="Email notifications" on={draft.emailNotifications} onChange={(v) => set("emailNotifications", v)} />
-            <Toggle label="SMS notifications" on={draft.smsNotifications} onChange={(v) => set("smsNotifications", v)} />
-            <Toggle label="Low stock alerts" on={draft.lowStockAlerts} onChange={(v) => set("lowStockAlerts", v)} />
-          </Section>
 
           <Section title="Security & Actions" icon={<Shield className="h-5 w-5 text-[#004aad]" />} description="Manage your session" className="lg:col-span-2">
             <div className="flex flex-wrap gap-3">
@@ -115,11 +109,10 @@ export default function SettingsScreen({ onSignOut }: { onSignOut: () => void })
             </div>
             <p className="text-sm text-[#64748b]">{lastSyncAt ? `Last synced ${new Date(lastSyncAt).toLocaleString()}` : "Not synced yet"}</p>
             <button onClick={() => void syncNow()} disabled={!online} className="dashboard-action-primary mt-1 w-full disabled:opacity-50">Sync now</button>
-            <Toggle label="Enable offline mode" on={draft.offlineMode} onChange={(v) => set("offlineMode", v)} />
+            <p className="text-xs text-[#94a3b8]">Offline mode is always on — sales and edits made without a connection sync automatically when you're back online.</p>
           </Section>
-          <Section title="Data Backup" icon={<Cloud className="h-5 w-5 text-[#004aad]" />} description="Keep a copy of your data" tint>
-            <Toggle label="Auto backup" on={draft.autoBackup} onChange={(v) => set("autoBackup", v)} />
-            <button onClick={() => notify("Backup started")} className="dashboard-action-primary mt-1 w-full">Run backup now</button>
+          <Section title="Data Backup" icon={<Cloud className="h-5 w-5 text-[#004aad]" />} description="Your data is safe" tint>
+            <p className="text-sm text-[#64748b]">Everything you record is stored on the FahamPesa server the moment it syncs — there's nothing to back up manually. This device also keeps a local copy so you can keep working offline.</p>
           </Section>
         </div>
       )}
@@ -139,17 +132,13 @@ export default function SettingsScreen({ onSignOut }: { onSignOut: () => void })
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Section title="Contact Support" icon={<Phone className="h-5 w-5 text-[#004aad]" />} description="We're here to help">
             <div className="space-y-3 rounded-lg border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
-              <SupportRow icon={<Phone className="h-4 w-4 text-white" />} bg="bg-[#004aad]" text="+254 700 000 000" />
+              <SupportRow icon={<Phone className="h-4 w-4 text-white" />} bg="bg-[#004aad]" text="+254 722 628 885" />
               <SupportRow icon={<Mail className="h-4 w-4 text-white" />} bg="bg-[#004aad]" text="support@fahampesa.com" />
-              <SupportRow icon={<MessageSquare className="h-4 w-4 text-white" />} bg="bg-green-600" text="WhatsApp chat" />
+              <SupportRow icon={<MessageSquare className="h-4 w-4 text-white" />} bg="bg-green-600" text="WhatsApp: +254 722 628 885" />
             </div>
           </Section>
-          <Section title="Quick Help" icon={<MessageSquare className="h-5 w-5 text-[#004aad]" />} description="Guides and FAQs">
-            {["User Guide", "Frequently Asked Questions", "Schedule Training"].map((item) => (
-              <button key={item} onClick={() => notify(`Opening: ${item}`)} className="w-full rounded-[10px] border border-[#e6ebf2] px-4 py-3 text-left text-sm font-medium text-[#334155] transition-colors hover:bg-blue-50 hover:text-[#004aad]">
-                {item}
-              </button>
-            ))}
+          <Section title="Quick Help" icon={<MessageSquare className="h-5 w-5 text-[#004aad]" />} description="Talk to a human">
+            <p className="text-sm text-[#64748b]">Message us on WhatsApp or email support@fahampesa.com — we usually reply within a few hours and can walk you through anything, including training for your team.</p>
           </Section>
         </div>
       )}
@@ -179,16 +168,6 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
   );
 }
 
-function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm font-medium text-[#334155]">{label}</span>
-      <button onClick={() => onChange(!on)} className={`relative h-6 w-11 rounded-full transition-colors ${on ? "bg-[#004aad]" : "bg-gray-200"}`} aria-pressed={on}>
-        <span className={`absolute top-[2px] h-5 w-5 rounded-full bg-white transition-all ${on ? "left-[22px]" : "left-[2px]"}`} />
-      </button>
-    </div>
-  );
-}
 
 function SupportRow({ icon, bg, text }: { icon: React.ReactNode; bg: string; text: string }) {
   return (

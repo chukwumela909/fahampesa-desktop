@@ -429,7 +429,12 @@ function ProductModal({
           <Field label="Unit of measure">
             <SelectInput value={unitOfMeasure} onChange={(e) => setUnitOfMeasure(e.target.value)}>{UNITS.map((u) => <option key={u}>{u}</option>)}</SelectInput>
           </Field>
-          <Field label="Quantity"><TextInput type="number" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" /></Field>
+          <Field label="Quantity">
+            {/* Create-only: the update endpoint ignores quantity, so an editable field
+                here "saved" then silently reverted. Stock changes go through Inventory. */}
+            <TextInput type="number" min="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" disabled={Boolean(initial)} className={initial ? "opacity-60" : undefined} />
+            {initial && <p className="mt-1 text-xs text-[#94a3b8]">Adjust stock from the Inventory screen.</p>}
+          </Field>
           <Field label="Reorder level"><TextInput type="number" min="0" value={reorderLevel} onChange={(e) => setReorderLevel(e.target.value)} /></Field>
           <Field label="Supplier">
             <SelectInput value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>

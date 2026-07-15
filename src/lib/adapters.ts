@@ -187,6 +187,8 @@ export function adaptDebtor(raw: Raw, branchId: string): Debtor {
     status: status === "outstanding" || status === "overdue" ? status : "clear",
     active: raw.isActive !== false,
     note: raw.note ? str(raw.note) : undefined,
+    address: raw.address ? str(raw.address) : undefined,
+    debtDate: raw.debtDate ? str(raw.debtDate) : undefined,
   };
 }
 

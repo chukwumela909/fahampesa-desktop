@@ -151,7 +151,8 @@ function expensePaymentEnum(label: string): string {
 function transferErrorMessage(error: unknown): string {
   if (isBackendApiError(error)) {
     if (error.code === "transfer_inventory_missing") {
-      return "A selected product isn't set up in both branches yet. Add it to the destination branch first, then transfer.";
+      // Destination records are auto-created by the backend; only a missing SOURCE record blocks.
+      return "This product has no stock record in the source branch, so there's nothing to transfer.";
     }
     if (error.code === "insufficient_stock") {
       return "Not enough available stock in the source branch for that quantity.";
@@ -876,9 +877,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const row: Debtor = { ...data, id };
       setDebtors((cur) => [row, ...cur]);
       void patchCache("debtors", row);
-      // Backend persists name/phone/email/creditLimit/dueDate plus an optional note and
+      // Backend persists name/phone/address/debtDate/dueDate plus an optional note and
       // openingDebt (pre-existing debt applied once to the balance at creation).
-      void enqueue({ commandId: id, idempotencyKey: id, entityType: "debtor", entityId: id, operation: "create", branchId: activeBranch.current, baseVersion: null, payload: { name: data.name, phone: data.phone, email: data.email || undefined, creditLimit: data.creditLimit, dueDate: data.dueDate || undefined, note: data.note || undefined, openingDebt: data.currentDebt > 0 ? data.currentDebt : undefined } });
+      void enqueue({ commandId: id, idempotencyKey: id, entityType: "debtor", entityId: id, operation: "create", branchId: activeBranch.current, baseVersion: null, payload: { name: data.name, phone: data.phone, email: data.email || undefined, address: data.address || undefined, creditLimit: data.creditLimit, debtDate: data.debtDate || undefined, dueDate: data.dueDate || undefined, note: data.note || undefined, openingDebt: data.currentDebt > 0 ? data.currentDebt : undefined } });
       notify(`Added debtor "${data.name}"`);
     },
     [enqueue, notify],
@@ -889,7 +890,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       let updated: Debtor | undefined;
       setDebtors((cur) => cur.map((d) => (d.id === id ? (updated = { ...d, ...data }) : d)));
       if (updated) void patchCache("debtors", updated);
-      void enqueue({ commandId: newId(), idempotencyKey: newId(), entityType: "debtor", entityId: id, operation: "update", branchId: activeBranch.current, baseVersion: null, payload: { name: data.name, phone: data.phone, email: data.email || undefined, creditLimit: data.creditLimit, dueDate: data.dueDate || undefined, note: typeof data.note === "string" ? data.note : undefined, isActive: data.active } });
+      void enqueue({ commandId: newId(), idempotencyKey: newId(), entityType: "debtor", entityId: id, operation: "update", branchId: activeBranch.current, baseVersion: null, payload: { name: data.name, phone: data.phone, email: data.email || undefined, address: typeof data.address === "string" ? data.address : undefined, creditLimit: data.creditLimit, dueDate: data.dueDate || undefined, note: typeof data.note === "string" ? data.note : undefined, isActive: data.active } });
       notify("Debtor updated");
     },
     [enqueue, notify],

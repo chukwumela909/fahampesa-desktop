@@ -205,6 +205,10 @@ export interface Debtor {
   active?: boolean;
   /** Free-form note stored on the backend. */
   note?: string;
+  /** Street address stored on the backend. */
+  address?: string;
+  /** ISO date the debt was taken (backdatable). */
+  debtDate?: string;
 }
 
 export interface Expense {

@@ -16,28 +16,31 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { currency, sum } from "@/lib/format";
 import Modal, { Field, SelectInput, TextInput } from "@/components/ui/Modal";
 
-const filters = ["All", "Active", "Overdue", "High Risk", "At Limit"] as const;
+// Mutually exclusive tabs (mirrors the web app):
+// Active = owing & not past due · Completed = fully paid · Overdue = owing & past due.
+const filters = ["Active", "Completed", "Overdue"] as const;
 type Filter = (typeof filters)[number];
 const PAYMENT_METHODS = ["Cash", "M-Pesa", "Bank Transfer", "Card", "Cheque"];
 
-const riskBadge: Record<Debtor["risk"], string> = {
-  high: "bg-[#FEE2E2] text-[#DC2626]",
-  medium: "bg-[#FEF3E0] text-[#F29F05]",
-  low: "bg-[#E8F5E8] text-[#66BB6A]",
-};
+type DebtorTabStatus = "Active" | "Completed" | "Overdue";
 
-function riskFor(currentDebt: number, creditLimit: number): Debtor["risk"] {
-  const ratio = creditLimit > 0 ? currentDebt / creditLimit : 0;
-  if (ratio >= 0.8) return "high";
-  if (ratio >= 0.5) return "medium";
-  return "low";
+function tabStatusFor(debtor: Debtor): DebtorTabStatus {
+  if (debtor.currentDebt <= 0) return "Completed";
+  const pastDue = Boolean(debtor.dueDate && new Date(debtor.dueDate).getTime() < Date.now());
+  return pastDue ? "Overdue" : "Active";
 }
+
+const statusBadge: Record<DebtorTabStatus, string> = {
+  Active: "bg-[#E3F2FD] text-[#2175C7]",
+  Completed: "bg-[#E8F5E8] text-[#66BB6A]",
+  Overdue: "bg-[#FEE2E2] text-[#DC2626]",
+};
 
 export default function DebtorsScreen() {
   const { debtors, addDebtor, updateDebtor, recordDebtorPayment } = useAppData();
   const confirm = useConfirm();
   const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<Filter>("All");
+  const [activeFilter, setActiveFilter] = useState<Filter>("Active");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Debtor | null>(null);
   const [paying, setPaying] = useState<Debtor | null>(null);
@@ -45,17 +48,11 @@ export default function DebtorsScreen() {
 
   const active = debtors.filter((d) => d.active !== false);
   const outstanding = sum(active.map((d) => d.currentDebt));
-  const highRisk = active.filter((d) => d.risk === "high").length;
+  const overdueCount = active.filter((d) => tabStatusFor(d) === "Overdue").length;
 
   const visible = active.filter((d) => {
     if (!d.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
-    switch (activeFilter) {
-      case "Active": return d.currentDebt > 0;
-      case "Overdue": return d.status === "overdue" || d.risk !== "low";
-      case "High Risk": return d.risk === "high";
-      case "At Limit": return d.currentDebt >= d.creditLimit * 0.9;
-      default: return true;
-    }
+    return tabStatusFor(d) === activeFilter;
   });
 
   return (
@@ -70,7 +67,7 @@ export default function DebtorsScreen() {
         <SummaryCard bg="bg-[#E3F2FD]" border="border-blue-200/50" color="text-[#2175C7]" icon={<UsersIcon className="h-6 w-6 text-[#2175C7]" />} value={String(active.length)} label="Total Debtors" />
         <SummaryCard bg="bg-[#FEF3E0]" border="border-orange-200/50" color="text-[#F29F05]" icon={<BanknotesIcon className="h-6 w-6 text-[#F29F05]" />} value={currency(outstanding)} label="Outstanding Debt" />
         <SummaryCard bg="bg-[#E8F5E8]" border="border-green-200/50" color="text-[#66BB6A]" icon={<CheckCircleIcon className="h-6 w-6 text-[#66BB6A]" />} value={currency(sum(active.map((d) => d.totalPaid ?? 0)))} label="Total Paid" />
-        <SummaryCard bg="bg-[#FEE2E2]" border="border-red-200/50" color="text-[#DC2626]" icon={<ExclamationTriangleIcon className="h-6 w-6 text-[#DC2626]" />} value={String(highRisk)} label="High Risk" />
+        <SummaryCard bg="bg-[#FEE2E2]" border="border-red-200/50" color="text-[#DC2626]" icon={<ExclamationTriangleIcon className="h-6 w-6 text-[#DC2626]" />} value={String(overdueCount)} label="Overdue" />
       </div>
 
       <div className="rounded-2xl border border-[#e6ebf2] bg-[#f8fafc] p-4">
@@ -90,20 +87,20 @@ export default function DebtorsScreen() {
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {visible.map((debtor) => {
-            const available = debtor.creditLimit - debtor.currentDebt;
+            const tabStatus = tabStatusFor(debtor);
             return (
               <div key={debtor.id} className="rounded-2xl border border-[#e6ebf2] bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
                 <div className="flex items-start gap-3">
                   <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#2175C7] to-[#1565c0] text-lg font-bold text-white">{debtor.name.charAt(0)}</div>
                   <div className="min-w-0 flex-1">
                     <p className="text-lg font-bold text-[#0f172a]">{debtor.name}</p>
-                    <p className="text-sm text-[#64748b]">{debtor.phone}{debtor.dueDate ? ` · due ${new Date(debtor.dueDate).toLocaleDateString()}` : ""}</p>
+                    <p className="text-sm text-[#64748b]">{debtor.phone}{debtor.address ? ` · ${debtor.address}` : ""}</p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${riskBadge[debtor.risk]}`}>{debtor.risk} risk</span>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadge[tabStatus]}`}>{tabStatus}</span>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-[#f8fafc] p-3"><p className="text-xs font-medium text-[#64748b]">Outstanding</p><p className="text-sm font-bold text-[#F29F05]">{currency(debtor.currentDebt)}</p></div>
-                  <div className="rounded-xl bg-[#f8fafc] p-3"><p className="text-xs font-medium text-[#64748b]">Available credit</p><p className="text-lg font-bold text-[#66BB6A]">{currency(available)}</p></div>
+                  <div className="rounded-xl bg-[#f8fafc] p-3"><p className="text-xs font-medium text-[#64748b]">Owes</p><p className={`text-sm font-bold ${debtor.currentDebt > 0 ? "text-[#F29F05]" : "text-[#66BB6A]"}`}>{currency(debtor.currentDebt)}</p></div>
+                  <div className="rounded-xl bg-[#f8fafc] p-3"><p className="text-xs font-medium text-[#64748b]">Due date</p><p className={`text-sm font-bold ${tabStatus === "Overdue" ? "text-[#DC2626]" : "text-[#0f172a]"}`}>{debtor.dueDate ? new Date(debtor.dueDate).toLocaleDateString() : "—"}</p></div>
                 </div>
                 <div className="mt-4 flex gap-2">
                   <button onClick={() => setPaying(debtor)} className="flex-1 rounded-lg bg-[#66BB6A] py-2 text-sm font-medium text-white transition-colors hover:bg-[#5cb660]">Record Payment</button>
@@ -117,7 +114,7 @@ export default function DebtorsScreen() {
         </div>
       )}
 
-      {creating && <DebtorModal title="Add New Debtor" onClose={() => setCreating(false)} onSubmit={(d) => { const opening = d.openingDebt ?? 0; addDebtor({ ...d, currentDebt: opening, risk: riskFor(opening, d.creditLimit) }); setCreating(false); }} />}
+      {creating && <DebtorModal title="Add New Debtor" onClose={() => setCreating(false)} onSubmit={(d) => { const opening = d.openingDebt ?? 0; addDebtor({ ...d, creditLimit: 0, currentDebt: opening, risk: "low" }); setCreating(false); }} />}
       {editing && <DebtorModal title="Edit debtor" initial={editing} onClose={() => setEditing(null)} onSubmit={(d) => { updateDebtor(editing.id, d); setEditing(null); }} />}
       {paying && <PaymentModal debtor={paying} onClose={() => setPaying(null)} onSubmit={(amount, method, ref) => { recordDebtorPayment(paying.id, amount, method, ref); setPaying(null); }} />}
       {viewing && <DebtorDetailModal debtor={viewing} onClose={() => setViewing(null)} onPay={() => { setPaying(viewing); setViewing(null); }} />}
@@ -125,38 +122,35 @@ export default function DebtorsScreen() {
   );
 }
 
-type DebtorFormData = { name: string; phone: string; email?: string; creditLimit: number; dueDate?: string; note?: string; openingDebt?: number };
+type DebtorFormData = { name: string; phone: string; address?: string; debtDate?: string; dueDate?: string; note?: string; openingDebt?: number };
 
 function DebtorModal({ title, initial, onClose, onSubmit }: { title: string; initial?: Debtor; onClose: () => void; onSubmit: (d: DebtorFormData) => void }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [phone, setPhone] = useState(initial?.phone === "—" ? "" : initial?.phone ?? "");
-  const [email, setEmail] = useState(initial?.email ?? "");
-  const [creditLimit, setCreditLimit] = useState(String(initial?.creditLimit ?? ""));
+  const [address, setAddress] = useState(initial?.address ?? "");
   const [dueDate, setDueDate] = useState(initial?.dueDate ? initial.dueDate.slice(0, 10) : "");
   const [note, setNote] = useState(initial?.note ?? "");
-  // Opening debt is create-only: editing a debtor never rewrites their balance.
+  // Amount owed + date taken are create-only: editing never rewrites the balance.
   const isEdit = Boolean(initial);
   const [openingDebt, setOpeningDebt] = useState("");
+  const [debtDate, setDebtDate] = useState(new Date().toISOString().slice(0, 10));
   const openingDebtNum = Number(openingDebt) || 0;
-  const valid = name.trim() && Number(creditLimit) > 0 && (isEdit || openingDebtNum <= (Number(creditLimit) || 0));
+  const valid = Boolean(name.trim() && phone.trim());
   return (
-    <Modal title={title} description="Create a credit customer" onClose={onClose}
-      footer={<><button onClick={onClose} className="dashboard-action-muted">Cancel</button><button disabled={!valid} onClick={() => onSubmit({ name: name.trim(), phone: phone.trim() || "—", email: email.trim() || undefined, creditLimit: Number(creditLimit) || 0, dueDate: dueDate || undefined, note: note.trim() || (isEdit ? "" : undefined), openingDebt: isEdit ? undefined : openingDebtNum > 0 ? openingDebtNum : undefined })} className="dashboard-action-primary disabled:opacity-50">Save debtor</button></>}>
+    <Modal title={title} description="Track who owes you, how much, and when it's due" onClose={onClose}
+      footer={<><button onClick={onClose} className="dashboard-action-muted">Cancel</button><button disabled={!valid} onClick={() => onSubmit({ name: name.trim(), phone: phone.trim(), address: address.trim() || undefined, debtDate: isEdit ? undefined : debtDate || undefined, dueDate: dueDate || undefined, note: note.trim() || (isEdit ? "" : undefined), openingDebt: isEdit ? undefined : openingDebtNum > 0 ? openingDebtNum : undefined })} className="dashboard-action-primary disabled:opacity-50">Save debtor</button></>}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Full name"><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Customer name" /></Field>
         <Field label="Phone"><TextInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" /></Field>
-        <Field label="Email"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" /></Field>
-        <Field label="Credit limit"><TextInput type="number" min="0" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0" /></Field>
-        {!isEdit && <Field label="Opening debt"><TextInput type="number" min="0" value={openingDebt} onChange={(e) => setOpeningDebt(e.target.value)} placeholder="0 (existing balance, optional)" /></Field>}
+        <div className="sm:col-span-2"><Field label="Address"><TextInput value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Optional" /></Field></div>
+        {!isEdit && <Field label="Amount owed"><TextInput type="number" min="0" value={openingDebt} onChange={(e) => setOpeningDebt(e.target.value)} placeholder="0" /></Field>}
+        {!isEdit && <Field label="Date debt taken"><TextInput type="date" value={debtDate} onChange={(e) => setDebtDate(e.target.value)} /></Field>}
         <Field label="Due date"><TextInput type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></Field>
       </div>
       <div className="mt-4">
         <Field label="Note"><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Optional" className="dashboard-field w-full resize-none px-3 py-2 text-sm" /></Field>
       </div>
-      {!isEdit && openingDebtNum > (Number(creditLimit) || 0) && Number(creditLimit) > 0 && (
-        <p className="mt-2 text-xs text-[#b42318]">Opening debt can't exceed the credit limit.</p>
-      )}
-      <p className="mt-3 text-xs text-[#94a3b8]">Further debt accrues from credit sales. Installment schedules are managed on the web app.</p>
+      <p className="mt-3 text-xs text-[#94a3b8]">Payments can be partial — record them anytime from the debtor's card. Further debt accrues from credit sales.</p>
     </Modal>
   );
 }
@@ -182,19 +176,16 @@ function PaymentModal({ debtor, onClose, onSubmit }: { debtor: Debtor; onClose: 
 }
 
 function DebtorDetailModal({ debtor, onClose, onPay }: { debtor: Debtor; onClose: () => void; onPay: () => void }) {
-  const available = debtor.creditLimit - debtor.currentDebt;
   return (
     <Modal title={debtor.name} description={debtor.phone} onClose={onClose}
       footer={<><button onClick={onClose} className="dashboard-action-muted">Close</button><button onClick={onPay} className="dashboard-action-primary">Record payment</button></>}>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <Detail label="Outstanding" value={currency(debtor.currentDebt)} />
-        <Detail label="Credit limit" value={currency(debtor.creditLimit)} />
-        <Detail label="Available" value={currency(available)} />
+        <Detail label="Owes" value={currency(debtor.currentDebt)} />
         <Detail label="Total paid" value={currency(debtor.totalPaid ?? 0)} />
-        <Detail label="Status" value={debtor.status ?? "clear"} />
-        <Detail label="Risk" value={debtor.risk} />
-        {debtor.email && <Detail label="Email" value={debtor.email} />}
+        <Detail label="Status" value={tabStatusFor(debtor)} />
+        {debtor.debtDate && <Detail label="Debt taken" value={new Date(debtor.debtDate).toLocaleDateString()} />}
         {debtor.dueDate && <Detail label="Due date" value={new Date(debtor.dueDate).toLocaleDateString()} />}
+        {debtor.address && <Detail label="Address" value={debtor.address} />}
       </div>
       {debtor.note && (
         <div className="mt-4 rounded-[12px] bg-[#f8fafc] p-4">

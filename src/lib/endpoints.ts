@@ -70,6 +70,9 @@ export const createDebtor = (branchId: string, body: Raw) =>
   api<Raw>(`${b(branchId)}/debtors`, { method: "POST", body });
 export const updateDebtor = (branchId: string, id: string, body: Raw) =>
   api<Raw>(`${b(branchId)}/debtors/${id}`, { method: "PATCH", body });
+// Single debtor incl. its payment history ({ ...debtor, payments: [...] }).
+export const getDebtor = (branchId: string, id: string) =>
+  api<Raw>(`${b(branchId)}/debtors/${id}`);
 export const debtorPayment = (branchId: string, id: string, body: Raw) =>
   api<Raw>(`${b(branchId)}/debtors/${id}/payments`, { method: "POST", body });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   PlusIcon,
   UsersIcon,
@@ -14,6 +14,7 @@ import type { Debtor } from "@/data";
 import { useAppData } from "@/store/AppData";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { currency, sum } from "@/lib/format";
+import * as ep from "@/lib/endpoints";
 import Modal, { Field, SelectInput, TextInput } from "@/components/ui/Modal";
 
 // Mutually exclusive tabs (mirrors the web app):
@@ -175,7 +176,39 @@ function PaymentModal({ debtor, onClose, onSubmit }: { debtor: Debtor; onClose: 
   );
 }
 
+type PaymentRow = { id: string; amount: number; method: string; reference: string; balanceAfter: number; at: number };
+
 function DebtorDetailModal({ debtor, onClose, onPay }: { debtor: Debtor; onClose: () => void; onPay: () => void }) {
+  const [payments, setPayments] = useState<PaymentRow[] | null>(null); // null = loading
+  const [historyError, setHistoryError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await ep.getDebtor(debtor.branchId ?? "", debtor.id);
+        const list = Array.isArray((raw as { payments?: unknown }).payments)
+          ? ((raw as { payments: Record<string, unknown>[] }).payments)
+          : [];
+        const rows: PaymentRow[] = list.map((p, index) => ({
+          id: String(p.id ?? p._id ?? index),
+          amount: Number(p.amount ?? 0),
+          method: String(p.paymentMethod ?? "cash"),
+          reference: p.reference ? String(p.reference) : "",
+          balanceAfter: Number(p.outstandingBalance ?? 0),
+          at: p.createdAt ? new Date(String(p.createdAt)).getTime() : 0,
+        }));
+        if (!cancelled) setPayments(rows);
+      } catch {
+        if (!cancelled) {
+          setPayments([]);
+          setHistoryError(true);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [debtor.id, debtor.branchId]);
+
   return (
     <Modal title={debtor.name} description={debtor.phone} onClose={onClose}
       footer={<><button onClick={onClose} className="dashboard-action-muted">Close</button><button onClick={onPay} className="dashboard-action-primary">Record payment</button></>}>
@@ -193,7 +226,34 @@ function DebtorDetailModal({ debtor, onClose, onPay }: { debtor: Debtor; onClose
           <p className="mt-1 text-sm text-[#0f172a]">{debtor.note}</p>
         </div>
       )}
-      <p className="mt-4 text-xs text-[#94a3b8]">Payment history syncs from the server; recorded payments reduce the outstanding balance.</p>
+
+      <div className="mt-5">
+        <p className="mb-2 text-sm font-semibold text-[#0f172a]">Payment history{payments ? ` (${payments.length})` : ""}</p>
+        {payments === null ? (
+          <p className="text-sm text-[#94a3b8]">Loading payments…</p>
+        ) : historyError ? (
+          <p className="text-sm text-[#b42318]">Couldn't load the payment history — check your connection and reopen.</p>
+        ) : payments.length === 0 ? (
+          <p className="text-sm text-[#94a3b8]">No payments recorded yet.</p>
+        ) : (
+          <div className="max-h-56 space-y-2 overflow-y-auto">
+            {payments.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-3 rounded-[10px] border border-[#e6ebf2] px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#0f172a]">
+                    {currency(p.amount)} <span className="text-xs font-medium uppercase text-[#94a3b8]">{p.method === "mpesa" ? "M-Pesa" : p.method.replace("_", " ")}</span>
+                  </p>
+                  <p className="truncate text-xs text-[#64748b]">{p.at ? new Date(p.at).toLocaleString() : "—"}{p.reference ? ` · Ref: ${p.reference}` : ""}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-[11px] text-[#94a3b8]">Balance after</p>
+                  <p className="text-xs font-semibold text-[#0f172a]">{currency(p.balanceAfter)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }

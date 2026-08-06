@@ -32,9 +32,11 @@ interface SalesScreenProps {
   onBack: () => void;
   onSignOut: () => void;
   onViewHistory: () => void;
+  /** Cashiers have no dashboard to go back to — hides the back buttons. */
+  showBack?: boolean;
 }
 
-export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, onViewHistory }: SalesScreenProps) {
+export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, onViewHistory, showBack = true }: SalesScreenProps) {
   const { products: allProducts, sales: allSales, debtors, settings, completeSale, holdSale, removeHeld, heldSales, online, notify } = useAppData();
   // Default tax rate (%) comes from the business's configured VAT rate in settings.
   const defaultTaxRate = settings.taxRate ?? "";
@@ -241,9 +243,11 @@ export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, 
     <div className="min-h-screen overflow-hidden bg-[#f6f8fb] text-[#0f172a]" style={{ fontFamily: "var(--font-dm-sans)" }}>
       <header className="flex h-[78px] items-center border-b border-[#1a2547] bg-[#0b1733] text-white shadow-[0_1px_2px_rgba(0,0,0,0.25)]">
         <div className="flex h-full shrink-0 items-center gap-4 border-r border-[#1a2547] px-5">
-          <button type="button" onClick={onBack} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[#cbd5e1] transition hover:bg-[#1a2547] hover:text-white" title="Back to dashboard">
-            <ArrowLeft className="h-5 w-5" /> Back
-          </button>
+          {showBack && (
+            <button type="button" onClick={onBack} className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-[#cbd5e1] transition hover:bg-[#1a2547] hover:text-white" title="Back to dashboard">
+              <ArrowLeft className="h-5 w-5" /> Back
+            </button>
+          )}
           <h1 className="text-[18px] font-semibold tracking-[-0.01em]">Fahampesa POS</h1>
         </div>
         <div className="flex min-w-0 flex-1 items-center justify-end gap-5 px-7">
@@ -262,7 +266,9 @@ export default function SalesScreen({ branchId, cashierName, onBack, onSignOut, 
           <div className="h-8 w-px bg-[#1f2a4a]" />
           <button type="button" onClick={() => setCalcOpen((v) => !v)} aria-pressed={calcOpen} className={`grid h-11 w-11 place-items-center rounded-full transition hover:bg-[#1a2547] hover:text-white ${calcOpen ? "bg-[#1a2547] text-white" : "text-[#cbd5e1]"}`} title="Calculator"><Calculator className="h-6 w-6" /></button>
           <div className="h-8 w-px bg-[#1f2a4a]" />
-          <button type="button" onClick={onBack} className="grid h-11 w-11 place-items-center rounded-full text-[#cbd5e1] transition hover:bg-[#1a2547] hover:text-white" title="Back to dashboard"><Power className="h-7 w-7" /></button>
+          {showBack && (
+            <button type="button" onClick={onBack} className="grid h-11 w-11 place-items-center rounded-full text-[#cbd5e1] transition hover:bg-[#1a2547] hover:text-white" title="Back to dashboard"><Power className="h-7 w-7" /></button>
+          )}
           <button type="button" onClick={onSignOut} className="flex items-center gap-2 rounded-xl bg-[#1a2547] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#e11d48]" title="Log out"><LogOut className="h-5 w-5" /><span className="hidden sm:inline">Log out</span></button>
         </div>
       </header>

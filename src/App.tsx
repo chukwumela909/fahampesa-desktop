@@ -53,6 +53,8 @@ export default function App() {
   // from showing actions that would only fail at sync.
   const isCashier = session?.role !== "owner" && session?.role !== "manager";
   const roleHiddenScreens: ScreenKey[] = isCashier ? CASHIER_RESTRICTED_SCREENS : [];
+  // Cashiers live on the sales register; everyone else starts on the dashboard.
+  const homeScreen: ScreenKey = isCashier ? "sales" : "dashboard";
 
   const [loginMode, setLoginMode] = useState<LoginMode>("email");
   const [authEmail, setAuthEmail] = useState("");
@@ -87,8 +89,16 @@ export default function App() {
 
   // Block navigation to screens the current role can't access (cashiers → managerial screens).
   function changeScreen(next: ScreenKey) {
-    setScreen(roleHiddenScreens.includes(next) ? "dashboard" : next);
+    setScreen(roleHiddenScreens.includes(next) ? homeScreen : next);
   }
+
+  // The screen state initializes to "dashboard" before the session (and thus the role) resolves.
+  // Once we know the user is a cashier, bounce them off any restricted screen onto the register.
+  useEffect(() => {
+    if (status === "authenticated" && isCashier && CASHIER_RESTRICTED_SCREENS.includes(screen)) {
+      setScreen("sales");
+    }
+  }, [status, isCashier, screen]);
 
   function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -145,7 +155,8 @@ export default function App() {
       <SalesScreen
         branchId={branchId}
         cashierName={user?.displayName ?? user?.email?.split("@")[0] ?? "User"}
-        onBack={() => setScreen("dashboard")}
+        showBack={!isCashier}
+        onBack={() => setScreen(homeScreen)}
         onSignOut={handleSignOut}
         onViewHistory={() => setScreen("salesHistory")}
       />
@@ -166,7 +177,7 @@ export default function App() {
       hiddenScreens={roleHiddenScreens}
     >
       {screen === "dashboard" && <DashboardScreen branchId={branchId} onScreenChange={changeScreen} />}
-      {screen === "salesHistory" && <SalesHistoryScreen branchId={branchId} onBack={() => setScreen("dashboard")} />}
+      {screen === "salesHistory" && <SalesHistoryScreen branchId={branchId} onBack={() => setScreen(homeScreen)} />}
       {screen === "products" && <ProductsScreen branchId={branchId} />}
       {screen === "inventory" && <InventoryScreen branchId={branchId} />}
       {screen === "expenses" && <ExpensesScreen />}

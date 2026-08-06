@@ -8,8 +8,8 @@ export type Role = "owner" | "manager" | "cashier";
  * The backend is the real authority (it 403s writes for cashiers); this hides the affordances so a
  * cashier isn't shown management actions that would only fail at sync.
  *
- * Cashiers run the sales register and may view products/inventory for POS; everything managerial
- * (expenses, debtors, suppliers, reports, staff, branches) is hidden.
+ * Cashiers run the sales register only (client requirement): no dashboard, products, inventory,
+ * payments, or managerial screens. The POS product grid inside the sales screen is unaffected.
  */
 export function usePermissions() {
   const { session } = useAuth();
@@ -35,6 +35,10 @@ export function usePermissions() {
 
 /** Screens a cashier cannot open — hidden from the nav and blocked on navigation. */
 export const CASHIER_RESTRICTED_SCREENS: ScreenKey[] = [
+  "dashboard",
+  "products",
+  "inventory",
+  "payments",
   "expenses",
   "debtors",
   "reports",

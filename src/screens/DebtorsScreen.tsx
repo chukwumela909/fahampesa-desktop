@@ -37,7 +37,7 @@ const statusBadge: Record<DebtorTabStatus, string> = {
   Overdue: "bg-[#FEE2E2] text-[#DC2626]",
 };
 
-export default function DebtorsScreen() {
+export default function DebtorsScreen({ branchId }: { branchId?: string }) {
   const { debtors, addDebtor, updateDebtor, recordDebtorPayment } = useAppData();
   const confirm = useConfirm();
   const [search, setSearch] = useState("");
@@ -118,7 +118,7 @@ export default function DebtorsScreen() {
       {creating && <DebtorModal title="Add New Debtor" onClose={() => setCreating(false)} onSubmit={(d) => { const opening = d.openingDebt ?? 0; addDebtor({ ...d, creditLimit: 0, currentDebt: opening, risk: "low" }); setCreating(false); }} />}
       {editing && <DebtorModal title="Edit debtor" initial={editing} onClose={() => setEditing(null)} onSubmit={(d) => { updateDebtor(editing.id, d); setEditing(null); }} />}
       {paying && <PaymentModal debtor={paying} onClose={() => setPaying(null)} onSubmit={(amount, method, ref) => { recordDebtorPayment(paying.id, amount, method, ref); setPaying(null); }} />}
-      {viewing && <DebtorDetailModal debtor={viewing} onClose={() => setViewing(null)} onPay={() => { setPaying(viewing); setViewing(null); }} />}
+      {viewing && <DebtorDetailModal debtor={viewing} fallbackBranchId={branchId} onClose={() => setViewing(null)} onPay={() => { setPaying(viewing); setViewing(null); }} />}
     </div>
   );
 }
@@ -178,15 +178,19 @@ function PaymentModal({ debtor, onClose, onSubmit }: { debtor: Debtor; onClose: 
 
 type PaymentRow = { id: string; amount: number; method: string; reference: string; balanceAfter: number; at: number };
 
-function DebtorDetailModal({ debtor, onClose, onPay }: { debtor: Debtor; onClose: () => void; onPay: () => void }) {
+function DebtorDetailModal({ debtor, fallbackBranchId, onClose, onPay }: { debtor: Debtor; fallbackBranchId?: string; onClose: () => void; onPay: () => void }) {
   const [payments, setPayments] = useState<PaymentRow[] | null>(null); // null = loading
   const [historyError, setHistoryError] = useState(false);
+
+  // Debtors created before branch stamping have no branchId; an empty branch produces
+  // GET /branches//debtors/:id → 404, so fall back to the screen's active branch.
+  const historyBranchId = debtor.branchId || fallbackBranchId || "";
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const raw = await ep.getDebtor(debtor.branchId ?? "", debtor.id);
+        const raw = await ep.getDebtor(historyBranchId, debtor.id);
         const list = Array.isArray((raw as { payments?: unknown }).payments)
           ? ((raw as { payments: Record<string, unknown>[] }).payments)
           : [];
@@ -207,7 +211,7 @@ function DebtorDetailModal({ debtor, onClose, onPay }: { debtor: Debtor; onClose
       }
     })();
     return () => { cancelled = true; };
-  }, [debtor.id, debtor.branchId]);
+  }, [debtor.id, historyBranchId]);
 
   return (
     <Modal title={debtor.name} description={debtor.phone} onClose={onClose}

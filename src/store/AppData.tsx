@@ -478,10 +478,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             return merged;
           });
         }
+        // Local optimistic rows (their id doubles as the outbox commandId) must survive a
+        // refresh until their create command has actually synced — otherwise a queued or
+        // failed write silently vanishes from every screen while still sitting in the outbox.
+        const outboxIds = new Set((await db.outbox.toArray()).map((c) => c.entityId));
+        const mergeUnsynced = <T extends { id: string; branchId?: string }>(prev: T[], backendRows: T[]) => {
+          const kept = prev.filter((r) => outboxIds.has(r.id) && !backendRows.some((b) => b.id === r.id));
+          return [...kept, ...backendRows];
+        };
+
         if (exRaw) {
-          const rows = exRaw.map((r) => adaptExpense(r, branchId));
-          await replaceBranchCache("expenses", branchId, rows);
-          setExpenses(rows);
+          const backendRows = exRaw.map((r) => adaptExpense(r, branchId));
+          setExpenses((prev) => {
+            const merged = mergeUnsynced(prev, backendRows);
+            void replaceBranchCache("expenses", branchId, merged.filter((row) => row.branchId === branchId));
+            return merged;
+          });
         }
         if (suRaw) {
           const rows = suRaw.map((r) => adaptSupplier(r, branchId));
@@ -489,9 +501,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           setSuppliers(rows);
         }
         if (deRaw) {
-          const rows = deRaw.map((r) => adaptDebtor(r, branchId));
-          await replaceBranchCache("debtors", branchId, rows);
-          setDebtors(rows);
+          const backendRows = deRaw.map((r) => adaptDebtor(r, branchId));
+          setDebtors((prev) => {
+            const merged = mergeUnsynced(prev, backendRows);
+            void replaceBranchCache("debtors", branchId, merged.filter((row) => row.branchId === branchId));
+            return merged;
+          });
         }
         if (stRaw) {
           const rows = stRaw.map(adaptStaff);
@@ -619,6 +634,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   // auto-drain when connectivity returns
   useEffect(() => {
     if (online) void drain();
+  }, [online, drain]);
+
+  // Retry loop: a network blip mid-drain leaves commands "pending" with nothing scheduled to
+  // retry them (the online flag never toggles on a blip, and enqueue's drain no-ops while one
+  // is already running). Poll the outbox and re-drain while anything is still pending.
+  useEffect(() => {
+    if (!online) return;
+    const timer = window.setInterval(async () => {
+      const stuck = await db.outbox.filter((c) => c.status === "pending" || c.status === "inflight").count();
+      if (stuck > 0) void drain();
+    }, 30_000);
+    return () => window.clearInterval(timer);
   }, [online, drain]);
 
   const enqueue = useCallback(
@@ -889,7 +916,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const addDebtor = useCallback<AppDataValue["addDebtor"]>(
     (data) => {
       const id = newId();
-      const row: Debtor = { ...data, id };
+      // Stamp the branch so branch-scoped reads (hydration/refresh) don't drop the row.
+      const row: Debtor = { ...data, id, branchId: data.branchId ?? activeBranch.current };
       setDebtors((cur) => [row, ...cur]);
       void patchCache("debtors", row);
       // Backend persists name/phone/address/debtDate/dueDate plus an optional note and
@@ -1085,7 +1113,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const addExpense = useCallback<AppDataValue["addExpense"]>(
     (data) => {
       const id = newId();
-      const row: Expense = { ...data, id };
+      // Stamp the branch and a timestamp: every branch-scoped read (mount hydration, refresh,
+      // dashboard filters) drops rows without a branchId, which made fresh expenses invisible.
+      const row: Expense = { ...data, id, branchId: data.branchId ?? activeBranch.current, createdAtMs: data.createdAtMs ?? Date.now() };
       setExpenses((cur) => [row, ...cur]);
       void patchCache("expenses", row);
       void enqueue({

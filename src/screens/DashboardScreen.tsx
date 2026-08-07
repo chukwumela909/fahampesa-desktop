@@ -43,7 +43,11 @@ export default function DashboardScreen({ branchId, onScreenChange }: { branchId
   // Optimistic just-now records may not carry a timestamp yet — count them in every window.
   const inPeriod = (ms?: number) => ms == null || ms >= periodStart;
   const periodSales = useMemo(() => branchSales.filter((s) => inPeriod(s.createdAtMs) && !s.refunded), [branchSales, periodStart]);
-  const periodExpenses = useMemo(() => expenses.filter((e) => inPeriod(e.createdAtMs)), [expenses, periodStart]);
+  const periodExpenses = useMemo(
+    // Tolerate rows without a branchId (pre-stamping optimistic writes) rather than dropping them.
+    () => expenses.filter((e) => (branchId === "all" || !e.branchId || e.branchId === branchId) && inPeriod(e.createdAtMs)),
+    [expenses, branchId, periodStart],
+  );
 
   const costFor = (productId: string) => branchProducts.find((p) => p.id === productId)?.costPrice ?? 0;
   const totalSalesAmount = sum(periodSales.map((sale) => sale.amount));

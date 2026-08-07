@@ -183,7 +183,7 @@ export default function App() {
       {screen === "expenses" && <ExpensesScreen />}
       {screen === "suppliers" && <SuppliersScreen branchId={branchId} />}
       {screen === "reports" && <ReportsScreen branchId={branchId} />}
-      {screen === "debtors" && <DebtorsScreen />}
+      {screen === "debtors" && <DebtorsScreen branchId={branchId} />}
       {screen === "staff" && (isPaid ? <StaffScreen /> : <UpgradeRequired feature="Staff management" expired={subscriptionExpired} onGoPro={() => setScreen("payments")} />)}
       {screen === "branches" && (isPaid ? <BranchesScreen /> : <UpgradeRequired feature="Multi-branch management" expired={subscriptionExpired} onGoPro={() => setScreen("payments")} />)}
       {screen === "payments" && <PaymentsScreen />}

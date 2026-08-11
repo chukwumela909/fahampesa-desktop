@@ -44,7 +44,7 @@ export default function App() {
   // Screens behind the Pro plan. When the account isn't on an active paid plan these
   // route to the upgrade prompt instead of the feature. Debtors, expenses, and suppliers
   // are Pro-only end to end — the backend 403s their routes for free accounts.
-  const PREMIUM_SCREENS: ScreenKey[] = ["branches", "staff", "debtors", "expenses", "suppliers"];
+  const PREMIUM_SCREENS: ScreenKey[] = ["branches", "staff", "debtors", "expenses", "suppliers", "reports"];
   const lockedScreens = isPaid ? [] : PREMIUM_SCREENS;
   // Was on a paid plan that has since lapsed — tailors the copy (renew vs upgrade).
   const subscriptionExpired = session?.planTier === "paid" && !isPaid;
@@ -183,7 +183,7 @@ export default function App() {
       {screen === "inventory" && <InventoryScreen branchId={branchId} />}
       {screen === "expenses" && (isPaid ? <ExpensesScreen /> : <UpgradeRequired feature="Expense tracking" expired={subscriptionExpired} onGoPro={() => setScreen("payments")} />)}
       {screen === "suppliers" && (isPaid ? <SuppliersScreen branchId={branchId} /> : <UpgradeRequired feature="Supplier management" expired={subscriptionExpired} onGoPro={() => setScreen("payments")} />)}
-      {screen === "reports" && <ReportsScreen branchId={branchId} />}
+      {screen === "reports" && (isPaid ? <ReportsScreen branchId={branchId} /> : <UpgradeRequired feature="Business reports" expired={subscriptionExpired} onGoPro={() => setScreen("payments")} />)}
       {screen === "debtors" && (isPaid ? <DebtorsScreen branchId={branchId} /> : <UpgradeRequired feature="Debtor management" expired={subscriptionExpired} onGoPro={() => setScreen("payments")} />)}
       {screen === "staff" && (isPaid ? <StaffScreen /> : <UpgradeRequired feature="Staff management" expired={subscriptionExpired} onGoPro={() => setScreen("payments")} />)}
       {screen === "branches" && (isPaid ? <BranchesScreen /> : <UpgradeRequired feature="Multi-branch management" expired={subscriptionExpired} onGoPro={() => setScreen("payments")} />)}

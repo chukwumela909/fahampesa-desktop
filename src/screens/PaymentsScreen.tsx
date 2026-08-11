@@ -70,8 +70,8 @@ export default function PaymentsScreen() {
 
   const planOptions = useMemo(
     () => [
-      { id: "free", name: "Free Plan", price: money(currency, 0), cycle: "/month", active: !isPaid, features: ["Single device", "Core POS & inventory", "Basic reports"] },
-      { id: "monthly", name: "1 Month Pro Plan", price: money(currency, monthly), cycle: "/month", active: isPaid && activeType === "monthly", features: ["Everything in Free", "Multi-branch & staff", "Full analytics & sync"] },
+      { id: "free", name: "Free Plan", price: money(currency, 0), cycle: "/month", active: !isPaid, features: ["Core POS & inventory", "Up to 10 products", "1 branch"] },
+      { id: "monthly", name: "1 Month Pro Plan", price: money(currency, monthly), cycle: "/month", active: isPaid && activeType === "monthly", features: ["Debtors, suppliers & expenses", "Multi-branch, staff & reports", "Full analytics & sync"] },
       { id: "yearly", name: "1 Year Pro Plan", price: money(currency, yearly), cycle: "/year", active: isPaid && activeType === "yearly", features: ["Everything in Pro", "2 months free", "Priority support"] },
     ],
     [currency, monthly, yearly, isPaid, activeType],
